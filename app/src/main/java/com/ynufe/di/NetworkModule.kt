@@ -14,6 +14,7 @@ import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.security.SecureRandom
 import javax.inject.Singleton
@@ -102,6 +103,7 @@ object NetworkModule {
             .baseUrl("https://xjwis.ynufe.edu.cn/")
             .client(okHttpClient)
             .addConverterFactory(ScalarsConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
 

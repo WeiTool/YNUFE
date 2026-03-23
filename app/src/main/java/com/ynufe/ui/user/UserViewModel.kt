@@ -10,6 +10,7 @@ import com.ynufe.data.repository.UserRepository
 import com.ynufe.data.room.user.UserDao
 import com.ynufe.data.room.user.UserEntity
 import com.ynufe.data.room.userInfo.UserInfoDao
+import com.ynufe.utils.CryptoManager
 import com.ynufe.utils.LoginResult
 import com.ynufe.utils.UserUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +35,7 @@ class UserViewModel @Inject constructor(
     private val gradeRepository: GradeRepository,
     private val userDao: UserDao,
     private val userInfoDao: UserInfoDao,
+    private val cryptoManager: CryptoManager,
 ) : ViewModel() {
 
     // ── 对话框专用：验证码图片 ──────────────────────────────
@@ -141,7 +143,15 @@ class UserViewModel @Inject constructor(
             _verifyCodeImage.value = null
             try {
                 userRepository.deleteUser(studentId)
-                val loginResult = userRepository.fetchUserInfo(studentId, password, code)
+
+                val plainPassword = try {
+                    cryptoManager.decrypt(password)
+                } catch (_: Exception) {
+                    password // 如果解密失败（比如旧版本明文数据），则尝试原始密码
+                }
+
+
+                val loginResult = userRepository.fetchUserInfo(studentId, plainPassword, code)
                 if (loginResult is LoginResult.Error) {
                     _syncError.value = loginResult.message
                     return@launch
@@ -164,7 +174,14 @@ class UserViewModel @Inject constructor(
             _verifyCodeImage.value = null
             try {
                 userRepository.deleteUser(studentId)
-                val loginResult = userRepository.fetchUserInfo(studentId, password, code)
+
+                val plainPassword = try {
+                    cryptoManager.decrypt(password)
+                } catch (_: Exception) {
+                    password // 如果解密失败（比如旧版本明文数据），则尝试原始密码
+                }
+
+                val loginResult = userRepository.fetchUserInfo(studentId, plainPassword, code)
                 if (loginResult is LoginResult.Error) {
                     _syncError.value = loginResult.message
                     return@launch
@@ -183,9 +200,10 @@ class UserViewModel @Inject constructor(
 
     fun saveUserAccount(studentId: String, password: String) {
         viewModelScope.launch {
+            val encryptedPassword = cryptoManager.encrypt(password)
             userDao.deactivateAllUsers()
             userDao.insertUser(
-                UserEntity(studentId = studentId, password = password, isActive = true)
+                UserEntity(studentId = studentId, password = encryptedPassword, isActive = true)
             )
         }
     }

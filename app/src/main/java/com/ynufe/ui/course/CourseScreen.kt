@@ -209,7 +209,7 @@ fun CourseNoUserContent(onMenuClick: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "左上角功能菜单可以设置校区与开学日期",
+                    text = "左上角功能菜单可以设置校区与上课日期",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -540,7 +540,7 @@ fun AppNavigationDrawer(
                 showModeToggle = false,
                 title = {
                     Text(
-                        text = "设置开学日期",
+                        text = "设置上课日期",
                         modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
                         style = MaterialTheme.typography.labelLarge
                     )
@@ -576,7 +576,7 @@ fun AppNavigationDrawer(
                     NavigationDrawerItem(
                         label = {
                             Column {
-                                Text(text = "开学日期", fontWeight = FontWeight.Medium)
+                                Text(text = "上课日期", fontWeight = FontWeight.Medium)
                                 Text(
                                     text = if (semesterStartMs != null) formatDateMs(semesterStartMs) else "点击设置",
                                     style = MaterialTheme.typography.labelSmall,
@@ -586,7 +586,7 @@ fun AppNavigationDrawer(
                         },
                         selected = false,
                         onClick = { showDatePicker = true },
-                        icon = { Icon(Icons.Default.CalendarMonth, "选择开学日期", tint = MaterialTheme.colorScheme.primary) },
+                        icon = { Icon(Icons.Default.CalendarMonth, "选择上课日期", tint = MaterialTheme.colorScheme.primary) },
                         colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)

@@ -1,5 +1,6 @@
 package com.ynufe.data.api
 
+import com.ynufe.data.model.CheckVersionResponse
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
@@ -89,4 +90,12 @@ interface ApiServices {
         @Query("method") method: String = "exit",
         @Query("tktime") tktime: Long // 不要在这里赋默认值，在调用时传
     ): Response<ResponseBody>
+
+    // 仓库地址
+    @GET("https://gitee.com/api/v5/repos/weitool/YNUFE/releases")
+    suspend fun checkVersion(
+        @Query("page") page : Int = 1,
+        @Query("per_page") perPage: Int = 1,
+        @Query("direction") direction: String = "desc"
+    ): Response<List<CheckVersionResponse>>
 }

@@ -1,8 +1,10 @@
 package com.ynufe.di
 
+import android.content.Context
 import com.ynufe.data.repository.LoginSystem
 import com.ynufe.data.repository.ParseJsp
 import com.ynufe.data.api.ApiServices
+import com.ynufe.data.repository.CheckVersionRepository
 import com.ynufe.data.repository.CourseRepository
 import com.ynufe.data.repository.GradeRepository
 import com.ynufe.data.repository.UserRepository
@@ -14,6 +16,7 @@ import com.ynufe.utils.EncodeUtils
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -63,4 +66,14 @@ object RepositoryModule {
     ): GradeRepository{
         return GradeRepository(gradeDao, parser, apiServices)
     }
+
+    @Provides
+    @Singleton
+    fun provideCheckVersionRepository(
+        apiServices: ApiServices,
+        @ApplicationContext context: Context
+    ): CheckVersionRepository {
+        return CheckVersionRepository(apiServices, context)
+    }
+
 }

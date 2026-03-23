@@ -57,7 +57,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     // 基础图标库（通常已包含在 Material3 中，但可以显式声明）
     implementation(libs.androidx.compose.material.icons.core)
-    implementation("androidx.core:core-splashscreen:1.2.0")
+    implementation(libs.androidx.core.splashscreen)
     // 扩展图标库（包含绝大多数常用图标）
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.converter.scalars)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
+    implementation(libs.retrofit.converter.gson)
 
     // --- 本地数据库 (Room) ---
     implementation(libs.androidx.room.runtime)
