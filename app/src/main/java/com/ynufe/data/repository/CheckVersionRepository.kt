@@ -55,7 +55,7 @@ class CheckVersionRepository @Inject constructor(
     }
 
     // 获取当前 App 的 VersionName
-    private fun getCurrentVersionName(): String {
+    fun getCurrentVersionName(): String {
         return try {
             val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.packageManager.getPackageInfo(

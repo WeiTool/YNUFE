@@ -7,8 +7,6 @@ import androidx.compose.ui.unit.dp
  */
 object InfoLayout {
     // 顶部区域
-    val TopAppBarAlpha = 0.9f
-    val TopAppBarPlaceholderHeight = 64.dp
     val LogoTopMargin = 40.dp
     val LogoSize = 80.dp
     val TitleToVersionSpacing = 4.dp
