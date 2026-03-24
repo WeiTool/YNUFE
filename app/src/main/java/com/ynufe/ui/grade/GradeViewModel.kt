@@ -19,8 +19,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class GradeViewModel @Inject constructor(
-    private val gradeRepository: GradeRepository,
-    userDao: UserDao
+    private val gradeRepository: GradeRepository, userDao: UserDao
 ) : ViewModel() {
 
     val searchQuery = MutableStateFlow("")
@@ -44,49 +43,40 @@ class GradeViewModel @Inject constructor(
      *   只会在 App 启动的极短瞬间显示一次，之后不再重复触发。
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<GradeUiState> = userDao.getUser()
-        .flatMapLatest { currentUser ->
-            val studentId = currentUser?.studentId ?: ""
-            if (studentId.isEmpty()) return@flatMapLatest flowOf(GradeUiState.Empty)
+    val uiState: StateFlow<GradeUiState> = userDao.getUser().flatMapLatest { currentUser ->
+        val studentId = currentUser?.studentId ?: ""
+        if (studentId.isEmpty()) return@flatMapLatest flowOf(GradeUiState.Empty)
 
-            combine(
-                gradeRepository.getGradesByStudentId(studentId),
-                searchQuery,
-                filterStatus
-            ) { grades, query, filter ->
+        combine(
+            gradeRepository.getGradesByStudentId(studentId), searchQuery, filterStatus
+        ) { grades, query, filter ->
 
-                val filteredList = grades.asSequence()
-                    .filter { grade ->
-                        if (query.isBlank()) return@filter true
-                        val cleanQuery = query.replace("[\\s　]".toRegex(), "")
-                        grade.courseName.replace("[\\s　]".toRegex(), "")
-                            .contains(cleanQuery, ignoreCase = true)
-                    }
-                    .filter { grade ->
-                        val numScore = grade.score.toDoubleOrNull() ?: 0.0
-                        when (filter) {
-                            GradeFilter.ALL -> true
-                            GradeFilter.PASSED -> numScore >= 60.0
-                            GradeFilter.FAILED -> numScore < 60.0
-                        }
-                    }
-                    .toList()
-
-                if (filteredList.isEmpty()) {
-                    GradeUiState.Empty
-                } else {
-                    GradeUiState.Success(filteredList.sortedByDescending { it.term })
-                }
+            if (grades.isEmpty()) {
+                return@combine GradeUiState.Empty
             }
+
+            val filteredList = grades.asSequence().filter { grade ->
+                if (query.isBlank()) return@filter true
+                val cleanQuery = query.replace("[\\s　]".toRegex(), "")
+                grade.courseName.replace("[\\s　]".toRegex(), "")
+                    .contains(cleanQuery, ignoreCase = true)
+            }.filter { grade ->
+                val numScore = grade.score.toDoubleOrNull() ?: 0.0
+                when (filter) {
+                    GradeFilter.ALL -> true
+                    GradeFilter.PASSED -> numScore >= 60.0
+                    GradeFilter.FAILED -> numScore < 60.0
+                }
+            }.toList()
+            GradeUiState.Success(filteredList.sortedByDescending { it.term })
         }
-        .catch { e ->
-            emit(GradeUiState.Error(e.message ?: "数据加载异常"))
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = GradeUiState.Loading
-        )
+    }.catch { e ->
+        emit(GradeUiState.Error(e.message ?: "数据加载异常"))
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = GradeUiState.Loading
+    )
 
     fun onSearchQueryChange(newQuery: String) {
         searchQuery.value = newQuery

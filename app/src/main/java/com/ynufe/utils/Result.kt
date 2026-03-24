@@ -37,17 +37,18 @@ sealed class UserUiState {
 //
 // Loading → 等待数据库首次返回
 // NoUser  → 未绑定任何账号
-// Empty   → 已绑定账号但尚未同步课表（附带 semesterStartMs 供抽屉使用）
+// Empty   → 已绑定账号但尚未同步课表（附带 classBeginTime 供抽屉使用）
 // Success → 课表加载成功
 // ────────────────────────────────────────────────────────────
 
 sealed class CourseUiState {
     data object Loading : CourseUiState()
     data object NoUser : CourseUiState()
-    data class Empty(val semesterStartMs: Long?) : CourseUiState()
+    data class Empty(val classBeginTime: Long?) : CourseUiState()
+
     data class Success(
         val courses: List<CourseEntity>,
-        val semesterStartMs: Long?
+        val classBeginTime: Long?
     ) : CourseUiState()
 }
 

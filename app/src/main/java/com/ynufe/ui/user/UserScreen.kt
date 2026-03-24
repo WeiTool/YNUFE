@@ -160,7 +160,7 @@ fun UserScreenContent(
     val isOperationLoading = (uiState as? UserUiState.Success)?.isOperationLoading ?: false
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // ── 主内容区 ──────────────────────────────────────────
+        // 主内容区
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -190,7 +190,7 @@ fun UserScreenContent(
             }
         }
 
-        // ── 悬浮工具栏 ────────────────────────────────────────
+        // 悬浮工具栏
         ExpandableToolbar(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -203,7 +203,7 @@ fun UserScreenContent(
         )
     }
 
-    // ── 对话框层 ──────────────────────────────────────────────
+    // 对话框层
     if (activeDialog != UserDialogType.NONE) {
         val currentUser = (uiState as? UserUiState.Success)?.user ?: UserEntity("", "")
         // 添加新账号时传空 Entity，编辑时传真实账号
@@ -239,7 +239,7 @@ fun UserScreenContent(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// UserUiState.Initializing → 骨架屏占位内容
+// UserUiState.Initializing -> 骨架屏占位内容
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
@@ -270,7 +270,7 @@ fun UserSkeletonContent() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// UserUiState.Success → 用户信息内容
+// UserUiState.Success -> 用户信息内容
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
@@ -339,7 +339,6 @@ fun UserActionDialog(
     allUsers: List<UserEntity>,
     verifyCodeImage: ByteArray?,
     syncError: String?,
-    // 用于感知操作是否结束，实现 GET 对话框登录成功自动关闭 ──
     isOperationLoading: Boolean,
     onDismiss: () -> Unit,
     onConfirmEdit: (String, String) -> Unit,
@@ -349,14 +348,12 @@ fun UserActionDialog(
     onRetry: () -> Unit,
     onRefreshCode: () -> Unit,
 ) {
-    // ── 状态初始化：利用 remember(key) 自动处理 type 切换时的重置 ──────────────────
     var idText by remember(type, user) {
         mutableStateOf(if (type == UserDialogType.EDIT) user.studentId else "")
     }
     var passwordText by remember(type, user) {
         mutableStateOf(
             if (type == UserDialogType.EDIT) {
-                // 如果学号为空，说明是点击“添加”进来的新用户 -> 预填充
                 if (user.studentId.isBlank()) "Aa!" else user.password
             } else {
                 ""
@@ -364,24 +361,18 @@ fun UserActionDialog(
         )
     }
 
-    // ── 核心校验逻辑 ──────────────────────────────────────────────────────────
     val isPasswordValid = if (user.studentId.isBlank()) {
-        // 如果是新用户：密码不能为空 且 不能是预设的“Aa!”
         passwordText.isNotBlank() && passwordText != "Aa!"
     } else {
-        // 如果是编辑老用户：只要不为空就行
         passwordText.isNotBlank()
     }
-    // 总开关：学号不为空 且 密码有效（已修改）
     val canSave = idText.isNotBlank() && isPasswordValid
 
     var codeText by remember(type) { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // GET 对话框是否处于错误视图
     val showError = type == UserDialogType.GET && syncError != null
 
-    // ── 自动关闭逻辑 ────────────────────────────────────────────────────────────
     var pendingSync by remember(type) { mutableStateOf(false) }
 
     LaunchedEffect(isOperationLoading, syncError) {
@@ -410,7 +401,7 @@ fun UserActionDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 when (type) {
-                    // ── 账号设置 ────────────────────────────────
+                    // 账号设置
                     UserDialogType.EDIT -> {
                         OutlinedTextField(
                             value = idText,
@@ -426,7 +417,6 @@ fun UserActionDialog(
                             onValueChange = { passwordText = it.toHalfWidth() },
                             label = { Text("密码") },
                             singleLine = true,
-                            // 红色框逻辑：基于 isPasswordValid 判断
                             isError = !isPasswordValid,
                             supportingText = {
                                 if (user.studentId.isBlank() && passwordText == "Aa!") {
@@ -435,10 +425,15 @@ fun UserActionDialog(
                                     Text("密码不能为空")
                                 }
                             },
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            visualTransformation = if (passwordVisible)
+                                VisualTransformation.None
+                            else
+                                PasswordVisualTransformation(),
                             trailingIcon = {
-                                val image =
-                                    if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                val image = if (passwordVisible)
+                                    Icons.Default.Visibility
+                                else
+                                    Icons.Default.VisibilityOff
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                     Icon(imageVector = image, contentDescription = null)
                                 }
@@ -447,7 +442,7 @@ fun UserActionDialog(
                         )
                     }
 
-                    // ── 验证登录（含错误重试视图）───────────────
+                    // 验证登录（含错误重试视图）
                     UserDialogType.GET -> {
                         AnimatedContent(
                             targetState = showError,
@@ -508,12 +503,15 @@ fun UserActionDialog(
                         }
                     }
 
-                    // ── 删除确认 ────────────────────────────────
+                    // 删除确认
                     UserDialogType.DELETE -> {
-                        Text("确定要删除当前账号信息并退出登录吗？此操作不可撤销。")
+                        Text(
+                            text = "确定要删除当前账号信息并退出登录吗? 此操作不可撤销。",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
 
-                    // ── 切换账号 ────────────────────────────────
+                    // 切换账号
                     UserDialogType.CHOOSE -> {
                         if (allUsers.isEmpty()) {
                             Text("暂无已保存的账号", style = MaterialTheme.typography.bodyMedium)
@@ -526,9 +524,11 @@ fun UserActionDialog(
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(
-                                                if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(
-                                                    alpha = 0.5f
-                                                ) else Color.Transparent
+                                                if (isActive)
+                                                    MaterialTheme.colorScheme.primaryContainer.copy(
+                                                        alpha = 0.5f
+                                                    )
+                                                else Color.Transparent
                                             )
                                             .clickable(enabled = !isActive) { onSwitchUser(u.studentId) }
                                             .padding(horizontal = 4.dp, vertical = 10.dp),
@@ -538,13 +538,21 @@ fun UserActionDialog(
                                             modifier = Modifier
                                                 .size(36.dp)
                                                 .clip(CircleShape)
-                                                .background(if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+                                                .background(
+                                                    if (isActive)
+                                                        MaterialTheme.colorScheme.primary
+                                                    else
+                                                        MaterialTheme.colorScheme.surfaceVariant
+                                                ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
                                                 Icons.Default.Person,
                                                 null,
-                                                tint = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (isActive)
+                                                    MaterialTheme.colorScheme.onPrimary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
@@ -563,9 +571,8 @@ fun UserActionDialog(
                                         )
                                     }
                                     if (index < allUsers.lastIndex) HorizontalDivider(
-                                        modifier = Modifier.padding(
-                                            vertical = 2.dp
-                                        ), thickness = 0.5.dp
+                                        modifier = Modifier.padding(vertical = 2.dp),
+                                        thickness = 0.5.dp
                                     )
                                 }
                             }
@@ -594,7 +601,6 @@ fun UserActionDialog(
                 ) { Text("登录") }
 
                 type == UserDialogType.EDIT -> {
-                    // 直接使用顶部定义的 canSave，确保 Aa! 的判定逻辑生效
                     TextButton(
                         onClick = {
                             if (canSave) {
@@ -603,9 +609,7 @@ fun UserActionDialog(
                             }
                         },
                         enabled = canSave
-                    ) {
-                        Text("保存")
-                    }
+                    ) { Text("保存") }
                 }
 
                 else -> TextButton(onClick = {
@@ -674,7 +678,8 @@ fun ProfileHeader(
                 Text(
                     text = studentId,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (isLoading) Color.Transparent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isLoading) Color.Transparent
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .shimmerLoading(isLoading)
                         .widthIn(min = 120.dp)
@@ -801,7 +806,13 @@ fun ActionTile(
         ) {
             Icon(icon, contentDescription = null, tint = containerColor)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(title, fontWeight = FontWeight.Medium, color = containerColor)
+            // 补全 style，通过 Typography 统一管理
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = containerColor
+            )
         }
     }
 }
@@ -817,7 +828,11 @@ fun EmptyStateView() {
                 tint = Color.LightGray
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Text("尚未绑定学生账号", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+            Text(
+                "尚未绑定学生账号",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray
+            )
         }
     }
 }

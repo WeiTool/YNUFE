@@ -95,11 +95,11 @@ class CourseViewModel @Inject constructor(
                 else -> courseDao.getCoursesByStudentId(user.studentId)
                     .map { courses ->
                         if (courses.isEmpty()) {
-                            CourseUiState.Empty(semesterStartMs = user.startTime)
+                            CourseUiState.Empty(classBeginTime = user.startTime)
                         } else {
                             CourseUiState.Success(
                                 courses = courses,
-                                semesterStartMs = user.startTime
+                                classBeginTime = user.startTime
                             )
                         }
                     }

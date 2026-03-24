@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
@@ -35,6 +36,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.ynufe.data.repository.UpdateResult
 import com.ynufe.ui.course.CourseScreen
 import com.ynufe.ui.grade.GradeScreen
+import com.ynufe.ui.info.InfoScreen
 import com.ynufe.ui.theme.YNUFETheme
 import com.ynufe.ui.user.UserScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -106,6 +108,7 @@ fun YNUFEApp(viewModel: CheckVersionViewModel) {
                     AppDestinations.DateRange -> CourseScreen()
                     AppDestinations.Leaderboard -> GradeScreen()
                     AppDestinations.PROFILE -> UserScreen()
+                    AppDestinations.INFO -> InfoScreen()
                 }
             }
         }
@@ -115,6 +118,7 @@ enum class AppDestinations(val label: String, val icon: ImageVector) {
     DateRange("课程表", Icons.Default.DateRange),
     Leaderboard("成绩", Icons.Default.Leaderboard),
     PROFILE("用户", Icons.Default.Person),
+    INFO("关于", Icons.Default.Info)
 }
 
 @Composable

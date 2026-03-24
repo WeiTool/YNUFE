@@ -1,5 +1,10 @@
 package com.ynufe.ui.course
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +21,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +40,7 @@ import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,19 +65,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.course.CourseEntity
+import com.ynufe.ui.theme.AppTextStyle
 import com.ynufe.ui.theme.COURSE_COLORS
+import com.ynufe.ui.theme.courseCardStylesForWidth
 import com.ynufe.utils.CourseUiState
 import com.ynufe.utils.DateUtils
 import com.ynufe.utils.DateUtils.formatDateMs
+import com.ynufe.utils.toHalfWidth
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.math.abs
+
 
 // ─────────────────────────────────────────────
 // 常量
@@ -95,10 +106,10 @@ fun CourseScreen(viewModel: CourseViewModel = hiltViewModel()) {
 
     val uiState by viewModel.uiState.collectAsState()
 
-    // semesterStartMs 在有用户时才有意义，供抽屉组件读取
-    val semesterStartMs = when (val s = uiState) {
-        is CourseUiState.Success -> s.semesterStartMs
-        is CourseUiState.Empty -> s.semesterStartMs
+    // 仅在有用户数据时才能读取学期开始时间
+    val classBeginTime = when (val s = uiState) {
+        is CourseUiState.Success -> s.classBeginTime
+        is CourseUiState.Empty -> s.classBeginTime
         else -> null
     }
 
@@ -106,41 +117,31 @@ fun CourseScreen(viewModel: CourseViewModel = hiltViewModel()) {
         drawerState = drawerState,
         currentScheduleName = viewModel.currentScheduleName,
         onToggleSchedule = { isAnning -> viewModel.toggleSchedule(isAnning) },
-        semesterStartMs = semesterStartMs,
-        onSemesterStartChange = { newTime -> viewModel.updateSemesterStart(newTime) }
+        classBeginTime = classBeginTime,
+        onClassBeginTimeChange = { newTime -> viewModel.updateSemesterStart(newTime) }
     ) {
         when (val state = uiState) {
-            // 数据库初始化中：显示骨架屏
+            // 数据库初始化中 → 骨架屏
             is CourseUiState.Loading -> CourseLoadingContent(
                 onMenuClick = { scope.launch { drawerState.open() } }
             )
-
-            // 未绑定账号：引导空状态
+            // 未绑定账号 → 引导空状态
             is CourseUiState.NoUser -> CourseNoUserContent(
                 onMenuClick = { scope.launch { drawerState.open() } }
             )
-
-            // 已绑定账号但无课表：空网格 + 提示
+            // 已绑定但无课表 → 同样显示引导
             is CourseUiState.Empty -> CourseNoUserContent(
                 onMenuClick = { scope.launch { drawerState.open() } }
             )
-
-            // 课表加载成功：正常渲染
+            // 课表就绪 → 正常渲染
             is CourseUiState.Success -> {
-                val currentWeekInt = DateUtils.getCurrentWeekInt(state.semesterStartMs)
-                val weekDisplay = DateUtils.getWeekDescription(currentWeekInt)
-                val filteredCourses = remember(state.courses, currentWeekInt) {
-                    if (currentWeekInt == -1) state.courses
-                    else state.courses.filter {
-                        DateUtils.isCourseInCurrentWeek(it.weeks, currentWeekInt)
-                    }
-                }
+
                 CourseScreenContent(
                     currentTime = currentTime,
                     dayName = dayName,
-                    currentWeek = weekDisplay,
                     timeSlots = viewModel.currentTimeSlots,
-                    courses = filteredCourses,
+                    courses = state.courses,
+                    semesterStartMs = state.classBeginTime?: 0L, // 传递学期开始时间供 Pager 计算
                     onMenuClick = { scope.launch { drawerState.open() } }
                 )
             }
@@ -215,6 +216,7 @@ fun CourseNoUserContent(onMenuClick: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
+                    // 全角括号改为半角
                     text = "(需要先绑定账号)",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -231,38 +233,94 @@ fun CourseNoUserContent(onMenuClick: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────
-// CourseUiState.Success / Empty → 课表主内容
+// CourseUiState.Success → 课表主内容
 // ─────────────────────────────────────────────
 
 @Composable
 fun CourseScreenContent(
     currentTime: String,
     dayName: String,
-    currentWeek: String,
     timeSlots: List<TimeSlot>,
     courses: List<CourseEntity>,
     onMenuClick: () -> Unit,
+    semesterStartMs: Long
 ) {
+    val pageCount = 20
+    val actualCurrentWeek = DateUtils.getCurrentWeekInt(semesterStartMs)
+    val initialPage = (actualCurrentWeek - 1).coerceIn(0, pageCount - 1)
+
+    val pagerState = rememberPagerState(initialPage = initialPage) { pageCount }
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // 顶部导航栏
         CourseTopAppBar(
             currentTime = currentTime,
-            currentWeek = currentWeek,
+            currentWeek = if (pagerState.currentPage + 1 == actualCurrentWeek) {
+                "第 ${pagerState.currentPage + 1} 周 (本周)"
+            } else {
+                "第 ${pagerState.currentPage + 1} 周"
+            },
             dayFormat = dayName,
             onMenuClick = onMenuClick,
         )
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-        ) {
-            TimeColumn(timeSlots = timeSlots)
-            CourseTable(
-                courses = courses,
-                timeSlots = timeSlots,
-                modifier = Modifier.weight(1f)
-            )
+
+        // 使用 Box 包裹，使按钮能悬浮在课表上方
+        Box(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+            ) {
+                TimeColumn(timeSlots = timeSlots)
+
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.weight(1f),
+                    beyondViewportPageCount = 1
+                ) { pageIndex ->
+                    val displayWeek = pageIndex + 1
+                    val weekCourses = remember(courses, displayWeek) {
+                        courses.filter {
+                            DateUtils.isCourseInCurrentWeek(it.weeks, displayWeek)
+                        }
+                    }
+                    CourseTable(
+                        courses = weekCourses,
+                        timeSlots = timeSlots,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // 只要当前页面不是“本周”对应的页面，就显示按钮
+            this@Column.AnimatedVisibility(
+                visible = pagerState.currentPage != initialPage,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 32.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            // 平滑滚动回“本周”
+                            pagerState.animateScrollToPage(initialPage)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = "回到本周"
+                    )
+                }
+            }
         }
     }
 }
@@ -300,11 +358,13 @@ fun WeekHeaderRow() {
                 ) {
                     Text(
                         text = name,
-                        fontSize = 12.sp,
+                        // 从 AppTextStyle 统一取样式；今日列动态覆盖 fontWeight
+                        style = AppTextStyle.weekDayLabel,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                         color = if (isToday) Color.Red
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // 今日列下方红色高亮条
                     Box(
                         modifier = Modifier
                             .width(20.dp)
@@ -340,9 +400,24 @@ fun TimeColumn(timeSlots: List<TimeSlot>) {
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "${slot.section}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = slot.start, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(text = slot.end, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    // 节次编号，如 "1"、"12"
+                    Text(
+                        text = "${slot.section}",
+                        style = AppTextStyle.timeSlotSection,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    // 上课时间
+                    Text(
+                        text = slot.start,
+                        style = AppTextStyle.timeSlotTime,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // 下课时间，稍加透明度以形成层次
+                    Text(
+                        text = slot.end,
+                        style = AppTextStyle.timeSlotTime,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
                 }
             }
         }
@@ -399,6 +474,7 @@ fun DayColumn(
             )
             .border(0.3.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
+        // 绘制行分割线
         repeat(totalRows) { row ->
             HorizontalDivider(
                 modifier = Modifier
@@ -408,6 +484,7 @@ fun DayColumn(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
             )
         }
+        // 渲染课程卡片
         courses.forEach { course ->
             val topOffset = CELL_HEIGHT * (course.startSection - 1)
             val cardHeight = CELL_HEIGHT * course.rowSpan
@@ -417,6 +494,7 @@ fun DayColumn(
                     .fillMaxWidth()
                     .height(cardHeight)
                     .offset(y = topOffset)
+                    // 卡片与列边框之间留 2dp 间距
                     .padding(2.dp)
             )
         }
@@ -425,27 +503,67 @@ fun DayColumn(
 
 // ─────────────────────────────────────────────
 // 课程卡片
+//
+// 设计原则：
+//   1. BoxWithConstraints 在运行时拿到实际卡片内容宽度
+//   2. courseCardStylesForWidth() 按宽度断点选择最适合的字号组合
+//   3. 课名 / 教室 / 教师三行信息在任意分辨率下均完整显示
+//   4. toHalfWidth() 将全角标点转为半角，节省宝贵像素
+//   5. maxLines + TextOverflow.Ellipsis 兜底，绝对不会越界
 // ─────────────────────────────────────────────
 
 @Composable
 fun CourseCard(course: CourseEntity, modifier: Modifier = Modifier) {
     val bgColor = courseColor(course.name)
-    val isTall = course.rowSpan >= 2
 
-    Box(
+    // BoxWithConstraints 让我们在 Composable 测量阶段获得实际可用宽度，
+    // 然后再决定用哪套字号，避免任何硬编码 sp 散落在此。
+    // 注意：padding 在 modifier 里，BoxWithConstraints 内部 maxWidth
+    // 已经是减去 padding 后的净内容宽度。
+    BoxWithConstraints(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .background(bgColor.copy(alpha = 0.9f))
-            .padding(4.dp)
+            // 水平 padding 收窄至 3dp，为文字多留 1dp 空间
+            .padding(horizontal = 3.dp, vertical = 4.dp)
     ) {
+        // 根据卡片实际内容宽度选择对应字号档位
+        val styles = courseCardStylesForWidth(maxWidth.value)
+
+        // rowSpan >= 2 时卡片有足够垂直空间，行间加 2dp 间距
+        val isTall = course.rowSpan >= 2
+
         Column(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = if (isTall) Arrangement.spacedBy(4.dp) else Arrangement.Top
+            verticalArrangement = if (isTall) Arrangement.spacedBy(2.dp) else Arrangement.Top
         ) {
-            Text(text = course.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp, overflow = TextOverflow.Ellipsis)
-            if (isTall) {
-                if (course.room.isNotEmpty()) Text(text = course.room, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, lineHeight = 13.sp)
-                if (course.teacher.isNotEmpty()) Text(text = course.teacher, color = Color.White.copy(alpha = 0.8f), fontSize = 9.sp)
+            // ── 课程名称（始终显示）────────────────────────────────
+            // maxLines：单格最多 3 行（高度充裕），多格可适当放更多
+            Text(
+                text = course.name.toHalfWidth(),
+                style = styles.title,
+                color = Color.White,
+                softWrap = true
+            )
+
+            // ── 教室（非空时显示，所有卡片均展示）─────────────────
+            if (course.room.isNotEmpty()) {
+                Text(
+                    text = course.room.toHalfWidth(),
+                    style = styles.room,
+                    color = Color.White.copy(alpha = 0.92f),
+                    softWrap = true
+                )
+            }
+
+            // ── 教师（非空时显示，所有卡片均展示）─────────────────
+            if (course.teacher.isNotEmpty()) {
+                Text(
+                    text = course.teacher.toHalfWidth(),
+                    style = styles.teacher,
+                    color = Color.White.copy(alpha = 0.80f),
+                    softWrap = true
+                )
             }
         }
     }
@@ -463,40 +581,87 @@ fun CourseTopAppBar(
     dayFormat: String,
     onMenuClick: () -> Unit,
 ) {
-    Column(modifier = Modifier) {
-        CenterAlignedTopAppBar(
-            title = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = currentTime, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = currentWeek, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = dayFormat, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                    }
-                }
-            },
-            navigationIcon = {
-                IconButton(
-                    onClick = onMenuClick,
-                    modifier = Modifier.width(56.dp) // 稍微加宽一点
-                ) {
+    // 使用 BoxWithConstraints 动态获取屏幕宽度
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        // 1. 计算当前卡片的内容宽度 (逻辑同步自 Type.kt)
+        val screenWidth = maxWidth.value
+        val cardContentWidth = (screenWidth - 50f) / 7f - 10f
+
+        // 2. 匹配档位名称
+        val levelName = when {
+            cardContentWidth < 36f -> "极窄屏"
+            cardContentWidth < 48f -> "窄屏"
+            cardContentWidth < 68f -> "中屏"
+            else -> "宽屏"
+        }
+
+        Column(modifier = Modifier) {
+            CenterAlignedTopAppBar(
+                title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "菜单",
-                            modifier = Modifier.size(18.dp)
-                        )
                         Text(
-                            text = "菜单",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp
+                            text = currentTime,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = currentWeek,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = dayFormat,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onMenuClick,
+                        modifier = Modifier.width(56.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "菜单",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "菜单",
+                                style = AppTextStyle.menuIconLabel
+                            )
+                        }
+                    }
+                },
+                // ✨ 新增 actions：在导航栏右上角渲染档位标签
+                actions = {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = levelName,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 10.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
-                }
-            },
-            windowInsets = WindowInsets(0, 0, 0, 0)
-        )
-        WeekHeaderRow()
+                },
+                windowInsets = WindowInsets(0, 0, 0, 0)
+            )
+            WeekHeaderRow()
+        }
     }
 }
 
@@ -510,15 +675,15 @@ fun AppNavigationDrawer(
     drawerState: DrawerState,
     currentScheduleName: String,
     onToggleSchedule: (Boolean) -> Unit,
-    semesterStartMs: Long?,
-    onSemesterStartChange: (Long) -> Unit,
+    classBeginTime: Long?,
+    onClassBeginTimeChange: (Long) -> Unit,
     content: @Composable () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var showDatePicker by remember { mutableStateOf(false) }
 
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = semesterStartMs,
+        initialSelectedDateMillis = classBeginTime,
         initialDisplayMode = DisplayMode.Input
     )
 
@@ -527,7 +692,7 @@ fun AppNavigationDrawer(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 Button(onClick = {
-                    datePickerState.selectedDateMillis?.let { onSemesterStartChange(it) }
+                    datePickerState.selectedDateMillis?.let { onClassBeginTimeChange(it) }
                     showDatePicker = false
                 }) { Text("确定") }
             },
@@ -537,10 +702,10 @@ fun AppNavigationDrawer(
         ) {
             DatePicker(
                 state = datePickerState,
-                showModeToggle = false,
+                showModeToggle = true,
                 title = {
                     Text(
-                        text = "设置上课日期",
+                        text = "设置上课日期  (点击日历图标可以切换显示)",
                         modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
                         style = MaterialTheme.typography.labelLarge
                     )
@@ -558,6 +723,7 @@ fun AppNavigationDrawer(
     }
 
     BoxWithConstraints {
+        // 抽屉宽度：屏幕 75%，最大不超过 360dp（适配平板不过宽）
         val drawerWidth = (maxWidth * 0.75f).coerceAtMost(360.dp)
 
         ModalNavigationDrawer(
@@ -568,54 +734,91 @@ fun AppNavigationDrawer(
                     windowInsets = WindowInsets(0, 0, 0, 0)
                 ) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("功能菜单", modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "功能菜单",
+                        modifier = Modifier.padding(
+                            start = 16.dp, top = 12.dp, end = 16.dp, bottom = 12.dp
+                        ),
+                        style = MaterialTheme.typography.titleMedium
+                    )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    Text("学期配置", modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "学期配置",
+                        modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
 
                     NavigationDrawerItem(
                         label = {
                             Column {
                                 Text(text = "上课日期", fontWeight = FontWeight.Medium)
                                 Text(
-                                    text = if (semesterStartMs != null) formatDateMs(semesterStartMs) else "点击设置",
+                                    text = if (classBeginTime != null)
+                                        formatDateMs(classBeginTime)
+                                    else
+                                        "点击设置",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (semesterStartMs != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (classBeginTime != null)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
                         selected = false,
                         onClick = { showDatePicker = true },
-                        icon = { Icon(Icons.Default.CalendarMonth, "选择上课日期", tint = MaterialTheme.colorScheme.primary) },
-                        colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent),
+                        icon = {
+                            Icon(
+                                Icons.Default.CalendarMonth,
+                                "选择上课日期",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    Text("校区配置", modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "校区配置",
+                        modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
 
-                    listOf("安宁校区" to Icons.Default.Landscape, "龙泉校区" to Icons.Default.Apartment)
-                        .forEach { (name, icon) ->
-                            val isSelected = currentScheduleName == name
-                            NavigationDrawerItem(
-                                label = { Text(text = name, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                                selected = isSelected,
-                                onClick = {
-                                    onToggleSchedule(name == "安宁校区")
-                                    scope.launch { drawerState.close() }
-                                },
-                                icon = { Icon(icon, contentDescription = null) },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    unselectedContainerColor = Color.Transparent,
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                            )
-                        }
+                    listOf(
+                        "安宁校区" to Icons.Default.Landscape,
+                        "龙泉校区" to Icons.Default.Apartment
+                    ).forEach { (name, icon) ->
+                        val isSelected = currentScheduleName == name
+                        NavigationDrawerItem(
+                            label = {
+                                Text(
+                                    text = name,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            selected = isSelected,
+                            onClick = {
+                                onToggleSchedule(name == "安宁校区")
+                                scope.launch { drawerState.close() }
+                            },
+                            icon = { Icon(icon, contentDescription = null) },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                unselectedContainerColor = Color.Transparent,
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                        )
+                    }
                 }
             },
             content = content
