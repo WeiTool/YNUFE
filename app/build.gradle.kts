@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.runner)
+    implementation(libs.androidx.material3)
     ksp(libs.androidx.room.compiler)
 
     // --- 图片加载 (如果教务处有验证码) ---

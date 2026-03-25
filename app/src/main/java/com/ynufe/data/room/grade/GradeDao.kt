@@ -14,14 +14,12 @@ interface GradeDao {
     // 获取所有成绩，按学期降序排列
     @Query("""
         SELECT * FROM (
-            SELECT *, 
-            -- 创建一个标准化名字：转大写、去半角空格、去全角空格、统一全角括号为半角
+            SELECT *,
             REPLACE(REPLACE(REPLACE(REPLACE(UPPER(courseName), ' ', ''), '　', ''), '（', '('), '）', ')') AS normalizedName
             FROM grade 
             WHERE studentId = :studentId
         ) 
-        GROUP BY normalizedName 
-        -- 在重名课程中，取分数（转为数字比较）最高的那一行
+        GROUP BY normalizedName
         HAVING MAX(CAST(score AS REAL)) 
         ORDER BY term DESC
     """)

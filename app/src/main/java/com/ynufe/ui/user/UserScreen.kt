@@ -91,6 +91,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil.compose.SubcomposeAsyncImage
 import com.ynufe.data.room.user.UserEntity
 import com.ynufe.data.room.userInfo.UserInfoEntity
+import com.ynufe.ui.theme.UserLayout
 import com.ynufe.utils.UserUiState
 import com.ynufe.utils.toHalfWidth
 
@@ -151,16 +152,12 @@ fun UserScreenContent(
     onClearSyncError: () -> Unit,
 ) {
     var activeDialog by remember { mutableStateOf(UserDialogType.NONE) }
-    // 标记当前 GET 操作是获取课表还是成绩
     var isFetchingCourse by remember { mutableStateOf(true) }
-    // 区分"添加新账号"与"编辑当前账号"：前者需要清空表单
     var isAddingNewUser by remember { mutableStateOf(false) }
 
-    // 提取 isOperationLoading，用于传入对话框以实现登录成功自动关闭
     val isOperationLoading = (uiState as? UserUiState.Success)?.isOperationLoading ?: false
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 主内容区
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -190,7 +187,6 @@ fun UserScreenContent(
             }
         }
 
-        // 悬浮工具栏
         ExpandableToolbar(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -203,10 +199,8 @@ fun UserScreenContent(
         )
     }
 
-    // 对话框层
     if (activeDialog != UserDialogType.NONE) {
         val currentUser = (uiState as? UserUiState.Success)?.user ?: UserEntity("", "")
-        // 添加新账号时传空 Entity，编辑时传真实账号
         val dialogUser = if (isAddingNewUser) UserEntity("", "") else currentUser
         UserActionDialog(
             type = activeDialog,
@@ -231,7 +225,6 @@ fun UserScreenContent(
                 onSwitchUser(studentId)
                 activeDialog = UserDialogType.NONE
             },
-            // 重试：自动刷新验证码（startLoginFlow 内部已清除 syncError）
             onRetry = onPrepareLogin,
             onRefreshCode = onPrepareLogin,
         )
@@ -239,7 +232,7 @@ fun UserScreenContent(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// UserUiState.Initializing -> 骨架屏占位内容
+// UserUiState.Initializing → 骨架屏占位内容
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
@@ -248,29 +241,29 @@ fun UserSkeletonContent() {
     InfoSection(userInfo = null, isLoading = true)
     Row(
         modifier = Modifier
-            .padding(16.dp)
+            .padding(UserLayout.SkeletonTilePadding)
             .fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(UserLayout.SkeletonTileSpacing)
     ) {
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(100.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .shimmerLoading(true, RoundedCornerShape(16.dp))
+                .height(UserLayout.SkeletonTileHeight)
+                .clip(RoundedCornerShape(UserLayout.SkeletonTileCorner))
+                .shimmerLoading(true, RoundedCornerShape(UserLayout.SkeletonTileCorner))
         )
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(100.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .shimmerLoading(true, RoundedCornerShape(16.dp))
+                .height(UserLayout.SkeletonTileHeight)
+                .clip(RoundedCornerShape(UserLayout.SkeletonTileCorner))
+                .shimmerLoading(true, RoundedCornerShape(UserLayout.SkeletonTileCorner))
         )
     }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// UserUiState.Success -> 用户信息内容
+// UserUiState.Success → 用户信息内容
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
@@ -295,23 +288,29 @@ fun UserProfileContent(
     Spacer(modifier = Modifier.height(8.dp))
     Surface(
         modifier = Modifier
-            .padding(16.dp)
+            .padding(UserLayout.HintCardMargin)
             .fillMaxWidth(),
-        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f))
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = UserLayout.HintCardBgAlpha),
+        shape = RoundedCornerShape(UserLayout.HintCardCorner),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.tertiary.copy(alpha = UserLayout.HintCardBorderAlpha)
+        )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(
+                horizontal = UserLayout.HintCardPaddingH,
+                vertical = UserLayout.HintCardPaddingV
+            ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Default.Info,
                 null,
                 tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(UserLayout.HintCardIconSize)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(UserLayout.HintCardIconToTextSpacing))
             Column {
                 Text(
                     "用户信息",
@@ -355,9 +354,7 @@ fun UserActionDialog(
         mutableStateOf(
             if (type == UserDialogType.EDIT) {
                 if (user.studentId.isBlank()) "Aa!" else user.password
-            } else {
-                ""
-            }
+            } else ""
         )
     }
 
@@ -372,7 +369,6 @@ fun UserActionDialog(
     var passwordVisible by remember { mutableStateOf(false) }
 
     val showError = type == UserDialogType.GET && syncError != null
-
     var pendingSync by remember(type) { mutableStateOf(false) }
 
     LaunchedEffect(isOperationLoading, syncError) {
@@ -462,7 +458,7 @@ fun UserActionDialog(
                                     Icon(
                                         imageVector = Icons.Default.ErrorOutline,
                                         contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
+                                        modifier = Modifier.size(UserLayout.ErrorIconSize),
                                         tint = MaterialTheme.colorScheme.error
                                     )
                                     Text(
@@ -480,13 +476,13 @@ fun UserActionDialog(
                                         model = verifyCodeImage,
                                         contentDescription = "验证码",
                                         modifier = Modifier
-                                            .height(60.dp)
-                                            .width(150.dp)
+                                            .height(UserLayout.VerifyCodeImageHeight)
+                                            .width(UserLayout.VerifyCodeImageWidth)
                                             .clickable { onRefreshCode() },
                                         loading = {
                                             Box(contentAlignment = Alignment.Center) {
                                                 CircularProgressIndicator(
-                                                    modifier = Modifier.size(24.dp)
+                                                    modifier = Modifier.size(UserLayout.LoadingIndicatorSize)
                                                 )
                                             }
                                         }
@@ -522,7 +518,7 @@ fun UserActionDialog(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(UserLayout.ChooseUserItemCorner))
                                             .background(
                                                 if (isActive)
                                                     MaterialTheme.colorScheme.primaryContainer.copy(
@@ -530,13 +526,18 @@ fun UserActionDialog(
                                                     )
                                                 else Color.Transparent
                                             )
-                                            .clickable(enabled = !isActive) { onSwitchUser(u.studentId) }
-                                            .padding(horizontal = 4.dp, vertical = 10.dp),
+                                            .clickable(enabled = !isActive) {
+                                                onSwitchUser(u.studentId)
+                                            }
+                                            .padding(
+                                                horizontal = UserLayout.ChooseUserItemPaddingH,
+                                                vertical = UserLayout.ChooseUserItemPaddingV
+                                            ),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(36.dp)
+                                                .size(UserLayout.ChooseUserAvatarSize)
                                                 .clip(CircleShape)
                                                 .background(
                                                     if (isActive)
@@ -553,21 +554,22 @@ fun UserActionDialog(
                                                     MaterialTheme.colorScheme.onPrimary
                                                 else
                                                     MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(20.dp)
+                                                modifier = Modifier.size(UserLayout.ChooseUserAvatarIconSize)
                                             )
                                         }
-                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Spacer(modifier = Modifier.width(UserLayout.ChooseUserAvatarToIdSpacing))
                                         Text(
                                             text = u.studentId,
                                             style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                                            fontWeight = if (isActive) FontWeight.SemiBold
+                                            else FontWeight.Normal,
                                             modifier = Modifier.weight(1f)
                                         )
                                         if (isActive) Icon(
                                             Icons.Default.CheckCircle,
                                             null,
                                             tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(UserLayout.ChooseUserCheckIconSize)
                                         )
                                     }
                                     if (index < allUsers.lastIndex) HorizontalDivider(
@@ -644,15 +646,18 @@ fun ProfileHeader(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
-            .padding(24.dp)
+            .padding(UserLayout.ProfileHeaderPadding)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(UserLayout.AvatarSize)
                     .clip(CircleShape)
                     .shimmerLoading(isLoading, CircleShape)
-                    .background(if (isLoading) Color.Transparent else MaterialTheme.colorScheme.primary),
+                    .background(
+                        if (isLoading) Color.Transparent
+                        else MaterialTheme.colorScheme.primary
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (!isLoading) {
@@ -663,7 +668,7 @@ fun ProfileHeader(
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(UserLayout.AvatarToNameSpacing))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = name,
@@ -687,7 +692,11 @@ fun ProfileHeader(
             }
             Column {
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, "编辑", tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.Default.Edit,
+                        "编辑",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
@@ -703,7 +712,7 @@ fun ProfileHeader(
 
 @Composable
 fun InfoSection(userInfo: UserInfoEntity?, isLoading: Boolean) {
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.padding(UserLayout.InfoSectionPadding)) {
         Text(
             "基本信息",
             style = MaterialTheme.typography.labelLarge,
@@ -712,20 +721,36 @@ fun InfoSection(userInfo: UserInfoEntity?, isLoading: Boolean) {
         )
         Surface(
             tonalElevation = 1.dp,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(UserLayout.InfoSectionCorner),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                InfoItem(Icons.Default.School, "专业", userInfo?.major ?: "未设置", isLoading)
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp)
+            Column(modifier = Modifier.padding(UserLayout.InfoSectionPadding)) {
+                InfoItem(
+                    Icons.Default.School,
+                    "专业",
+                    userInfo?.major ?: "未设置",
+                    isLoading
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = UserLayout.InfoDividerPaddingV),
+                    thickness = 0.5.dp
+                )
                 InfoItem(
                     Icons.Default.AccountBalance,
                     "学院",
                     userInfo?.college ?: "未设置",
                     isLoading
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp)
-                InfoItem(Icons.Default.Groups, "班级", userInfo?.className ?: "未设置", isLoading)
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = UserLayout.InfoDividerPaddingV),
+                    thickness = 0.5.dp
+                )
+                InfoItem(
+                    Icons.Default.Groups,
+                    "班级",
+                    userInfo?.className ?: "未设置",
+                    isLoading
+                )
             }
         }
     }
@@ -737,10 +762,10 @@ fun InfoItem(icon: ImageVector, label: String, value: String, isLoading: Boolean
         Icon(
             icon,
             null,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(UserLayout.InfoItemIconSize),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(UserLayout.InfoItemIconToTextSpacing))
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
@@ -749,7 +774,7 @@ fun InfoItem(icon: ImageVector, label: String, value: String, isLoading: Boolean
                 .width(60.dp)
                 .shimmerLoading(isLoading)
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(UserLayout.InfoItemIconToTextSpacing))
         Text(
             value,
             style = MaterialTheme.typography.bodyLarge,
@@ -765,9 +790,9 @@ fun InfoItem(icon: ImageVector, label: String, value: String, isLoading: Boolean
 fun ActionGrid(onGetCourse: () -> Unit, onGetGrades: () -> Unit) {
     Row(
         modifier = Modifier
-            .padding(16.dp)
+            .padding(UserLayout.ActionGridPadding)
             .fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(UserLayout.ActionTileSpacing)
     ) {
         ActionTile(
             modifier = Modifier.weight(1f),
@@ -796,8 +821,8 @@ fun ActionTile(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(100.dp),
-        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.height(UserLayout.ActionTileHeight),
+        shape = RoundedCornerShape(UserLayout.ActionTileCorner),
         color = containerColor.copy(alpha = 0.1f)
     ) {
         Column(
@@ -805,8 +830,7 @@ fun ActionTile(
             verticalArrangement = Arrangement.Center
         ) {
             Icon(icon, contentDescription = null, tint = containerColor)
-            Spacer(modifier = Modifier.height(8.dp))
-            // 补全 style，通过 Typography 统一管理
+            Spacer(modifier = Modifier.height(UserLayout.ActionTileIconToTextSpacing))
             Text(
                 title,
                 style = MaterialTheme.typography.bodyMedium,
@@ -824,10 +848,10 @@ fun EmptyStateView() {
             Icon(
                 Icons.Default.AccountCircle,
                 null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(UserLayout.EmptyStateIconSize),
                 tint = Color.LightGray
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(UserLayout.EmptyStateIconToTextSpacing))
             Text(
                 "尚未绑定学生账号",
                 style = MaterialTheme.typography.bodyLarge,
@@ -853,7 +877,7 @@ fun ExpandableToolbar(
     Row(
         modifier = modifier.padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(UserLayout.ToolbarItemSpacing)
     ) {
         AnimatedVisibility(
             visible = expanded,
@@ -865,7 +889,7 @@ fun ExpandableToolbar(
                     slideOutHorizontally(targetOffsetX = { it / 2 })
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(UserLayout.ToolbarItemSpacing),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ToolbarItem(
@@ -884,12 +908,12 @@ fun ExpandableToolbar(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shape = CircleShape,
-            modifier = Modifier.size(56.dp)
+            modifier = Modifier.size(UserLayout.FabSize)
         ) {
             Icon(
                 imageVector = if (expanded) Icons.Default.Close else Icons.Default.Menu,
                 contentDescription = "工具箱",
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(UserLayout.FabIconSize)
             )
         }
     }
@@ -905,11 +929,18 @@ fun ToolbarItem(icon: ImageVector, label: String, onClick: () -> Unit) {
         shadowElevation = 0.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(
+                horizontal = UserLayout.ToolbarItemPaddingH,
+                vertical = UserLayout.ToolbarItemPaddingV
+            ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(UserLayout.ToolbarItemSpacing)
         ) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(UserLayout.ToolbarItemIconSize)
+            )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)

@@ -49,6 +49,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -65,14 +66,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.course.CourseEntity
-import com.ynufe.ui.theme.AppTextStyle
 import com.ynufe.ui.theme.COURSE_COLORS
-import com.ynufe.ui.theme.courseCardStylesForWidth
+import com.ynufe.ui.theme.CourseLayout
+import com.ynufe.ui.theme.CourseTextStyle
+import com.ynufe.ui.theme.rememberSafeCourseCardStyles
 import com.ynufe.utils.CourseUiState
 import com.ynufe.utils.DateUtils
 import com.ynufe.utils.DateUtils.formatDateMs
@@ -83,11 +85,8 @@ import kotlin.math.abs
 
 
 // ─────────────────────────────────────────────
-// 常量
+// 辅助：课程名映射到背景色
 // ─────────────────────────────────────────────
-
-private val CELL_HEIGHT: Dp = 80.dp
-private val TIME_COL_WIDTH: Dp = 50.dp
 
 private fun courseColor(name: String): Color =
     COURSE_COLORS[abs(name.hashCode()) % COURSE_COLORS.size]
@@ -106,7 +105,6 @@ fun CourseScreen(viewModel: CourseViewModel = hiltViewModel()) {
 
     val uiState by viewModel.uiState.collectAsState()
 
-    // 仅在有用户数据时才能读取学期开始时间
     val classBeginTime = when (val s = uiState) {
         is CourseUiState.Success -> s.classBeginTime
         is CourseUiState.Empty -> s.classBeginTime
@@ -121,27 +119,22 @@ fun CourseScreen(viewModel: CourseViewModel = hiltViewModel()) {
         onClassBeginTimeChange = { newTime -> viewModel.updateSemesterStart(newTime) }
     ) {
         when (val state = uiState) {
-            // 数据库初始化中 → 骨架屏
             is CourseUiState.Loading -> CourseLoadingContent(
                 onMenuClick = { scope.launch { drawerState.open() } }
             )
-            // 未绑定账号 → 引导空状态
             is CourseUiState.NoUser -> CourseNoUserContent(
                 onMenuClick = { scope.launch { drawerState.open() } }
             )
-            // 已绑定但无课表 → 同样显示引导
             is CourseUiState.Empty -> CourseNoUserContent(
                 onMenuClick = { scope.launch { drawerState.open() } }
             )
-            // 课表就绪 → 正常渲染
             is CourseUiState.Success -> {
-
                 CourseScreenContent(
                     currentTime = currentTime,
                     dayName = dayName,
                     timeSlots = viewModel.currentTimeSlots,
                     courses = state.courses,
-                    semesterStartMs = state.classBeginTime?: 0L, // 传递学期开始时间供 Pager 计算
+                    semesterStartMs = state.classBeginTime ?: 0L,
                     onMenuClick = { scope.launch { drawerState.open() } }
                 )
             }
@@ -165,15 +158,18 @@ fun CourseLoadingContent(onMenuClick: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(
+                    horizontal = CourseLayout.SkeletonPaddingH,
+                    vertical = CourseLayout.SkeletonPaddingV
+                ),
+            verticalArrangement = Arrangement.spacedBy(CourseLayout.SkeletonSpacing)
         ) {
             repeat(7) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(70.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .height(CourseLayout.SkeletonCardHeight)
+                        .clip(RoundedCornerShape(CourseLayout.SkeletonCardCorner))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 )
             }
@@ -199,7 +195,7 @@ fun CourseNoUserContent(onMenuClick: () -> Unit) {
                 Icon(
                     imageVector = Icons.Default.CalendarMonth,
                     contentDescription = null,
-                    modifier = Modifier.size(72.dp),
+                    modifier = Modifier.size(CourseLayout.EmptyStateIconSize),
                     tint = MaterialTheme.colorScheme.outline
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -216,7 +212,6 @@ fun CourseNoUserContent(onMenuClick: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    // 全角括号改为半角
                     text = "(需要先绑定账号)",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -254,7 +249,6 @@ fun CourseScreenContent(
     val scope = rememberCoroutineScope()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // 顶部导航栏
         CourseTopAppBar(
             currentTime = currentTime,
             currentWeek = if (pagerState.currentPage + 1 == actualCurrentWeek) {
@@ -266,7 +260,6 @@ fun CourseScreenContent(
             onMenuClick = onMenuClick,
         )
 
-        // 使用 Box 包裹，使按钮能悬浮在课表上方
         Box(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
@@ -294,26 +287,26 @@ fun CourseScreenContent(
                 }
             }
 
-            // 只要当前页面不是“本周”对应的页面，就显示按钮
+            // 当前页面不是本周时显示回到本周的 FAB
             this@Column.AnimatedVisibility(
                 visible = pagerState.currentPage != initialPage,
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut(),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = 32.dp)
+                    .padding(
+                        end = CourseLayout.FabPaddingEnd,
+                        bottom = CourseLayout.FabPaddingBottom
+                    )
             ) {
                 FloatingActionButton(
                     onClick = {
-                        scope.launch {
-                            // 平滑滚动回“本周”
-                            pagerState.animateScrollToPage(initialPage)
-                        }
+                        scope.launch { pagerState.animateScrollToPage(initialPage) }
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.size(56.dp)
+                    shape = RoundedCornerShape(CourseLayout.FabCorner),
+                    modifier = Modifier.size(CourseLayout.FabSize)
                 ) {
                     Icon(
                         imageVector = Icons.Default.CalendarMonth,
@@ -342,24 +335,24 @@ fun WeekHeaderRow() {
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
     ) {
-        Spacer(modifier = Modifier.width(TIME_COL_WIDTH))
+        Spacer(modifier = Modifier.width(CourseLayout.TimeColWidth))
 
         dayNames.forEachIndexed { index, name ->
             val isToday = index == todayIndex
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(vertical = 6.dp),
+                    .padding(vertical = CourseLayout.WeekHeaderPaddingV),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                    verticalArrangement = Arrangement.spacedBy(CourseLayout.WeekHeaderInnerSpacing)
                 ) {
                     Text(
                         text = name,
-                        // 从 AppTextStyle 统一取样式；今日列动态覆盖 fontWeight
-                        style = AppTextStyle.weekDayLabel,
+                        // CourseTextStyle 统一取样式；今日列动态覆盖 fontWeight
+                        style = CourseTextStyle.weekDayLabel,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                         color = if (isToday) Color.Red
                         else MaterialTheme.colorScheme.onSurfaceVariant
@@ -367,8 +360,8 @@ fun WeekHeaderRow() {
                     // 今日列下方红色高亮条
                     Box(
                         modifier = Modifier
-                            .width(20.dp)
-                            .height(2.dp)
+                            .width(CourseLayout.TodayIndicatorWidth)
+                            .height(CourseLayout.TodayIndicatorHeight)
                             .background(if (isToday) Color.Red else Color.Transparent)
                     )
                 }
@@ -387,14 +380,14 @@ fun WeekHeaderRow() {
 fun TimeColumn(timeSlots: List<TimeSlot>) {
     Column(
         modifier = Modifier
-            .width(TIME_COL_WIDTH)
+            .width(CourseLayout.TimeColWidth)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         timeSlots.forEach { slot ->
             Box(
                 modifier = Modifier
-                    .height(CELL_HEIGHT)
+                    .height(CourseLayout.CellHeight)
                     .fillMaxWidth()
                     .border(0.3.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                 contentAlignment = Alignment.Center
@@ -403,19 +396,19 @@ fun TimeColumn(timeSlots: List<TimeSlot>) {
                     // 节次编号，如 "1"、"12"
                     Text(
                         text = "${slot.section}",
-                        style = AppTextStyle.timeSlotSection,
+                        style = CourseTextStyle.timeSlotSection,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     // 上课时间
                     Text(
                         text = slot.start,
-                        style = AppTextStyle.timeSlotTime,
+                        style = CourseTextStyle.timeSlotTime,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     // 下课时间，稍加透明度以形成层次
                     Text(
                         text = slot.end,
-                        style = AppTextStyle.timeSlotTime,
+                        style = CourseTextStyle.timeSlotTime,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
@@ -463,7 +456,7 @@ fun DayColumn(
     isToday: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val columnHeight = CELL_HEIGHT * totalRows
+    val columnHeight = CourseLayout.CellHeight * totalRows
 
     Box(
         modifier = modifier
@@ -479,23 +472,22 @@ fun DayColumn(
             HorizontalDivider(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = CELL_HEIGHT * row),
+                    .offset(y = CourseLayout.CellHeight * row),
                 thickness = 0.3.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
             )
         }
         // 渲染课程卡片
         courses.forEach { course ->
-            val topOffset = CELL_HEIGHT * (course.startSection - 1)
-            val cardHeight = CELL_HEIGHT * course.rowSpan
+            val topOffset = CourseLayout.CellHeight * (course.startSection - 1)
+            val cardHeight = CourseLayout.CellHeight * course.rowSpan
             CourseCard(
                 course = course,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(cardHeight)
                     .offset(y = topOffset)
-                    // 卡片与列边框之间留 2dp 间距
-                    .padding(2.dp)
+                    .padding(CourseLayout.DayColumnCardPadding)
             )
         }
     }
@@ -505,64 +497,75 @@ fun DayColumn(
 // 课程卡片
 //
 // 设计原则：
-//   1. BoxWithConstraints 在运行时拿到实际卡片内容宽度
-//   2. courseCardStylesForWidth() 按宽度断点选择最适合的字号组合
-//   3. 课名 / 教室 / 教师三行信息在任意分辨率下均完整显示
+//   1. BoxWithConstraints 同时获取实际内容宽度和高度
+//   2. rememberSafeCourseCardStyles() 按宽度选档，并根据系统 fontScale
+//      自动收缩字号，防止 2K 高密度屏/用户放大字体时溢出卡片
+//   3. titleMaxLines 依据 rowSpan 和卡片宽度动态决定
 //   4. toHalfWidth() 将全角标点转为半角，节省宝贵像素
-//   5. maxLines + TextOverflow.Ellipsis 兜底，绝对不会越界
+//   5. maxLines + TextOverflow.Ellipsis 最终兜底，绝对不越界
 // ─────────────────────────────────────────────
 
 @Composable
 fun CourseCard(course: CourseEntity, modifier: Modifier = Modifier) {
     val bgColor = courseColor(course.name)
 
-    // BoxWithConstraints 让我们在 Composable 测量阶段获得实际可用宽度，
-    // 然后再决定用哪套字号，避免任何硬编码 sp 散落在此。
-    // 注意：padding 在 modifier 里，BoxWithConstraints 内部 maxWidth
-    // 已经是减去 padding 后的净内容宽度。
     BoxWithConstraints(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(CourseLayout.CardCorner))
             .background(bgColor.copy(alpha = 0.9f))
-            // 水平 padding 收窄至 3dp，为文字多留 1dp 空间
-            .padding(horizontal = 3.dp, vertical = 4.dp)
+            .padding(
+                horizontal = CourseLayout.CardPaddingH,
+                vertical = CourseLayout.CardPaddingV
+            )
     ) {
-        // 根据卡片实际内容宽度选择对应字号档位
-        val styles = courseCardStylesForWidth(maxWidth.value)
+        val widthDp  = maxWidth.value
+        val heightDp = maxHeight.value
 
-        // rowSpan >= 2 时卡片有足够垂直空间，行间加 2dp 间距
+        // ── 决定课程名最大行数 ────────────────────────────────────
+        // rowSpan >= 2：高度 ≈ 148dp，宽裕，允许 3 行
+        // rowSpan = 1 且宽度 >= 48dp（MD/LG）：字号较大，1 行即可
+        // rowSpan = 1 且宽度 < 48dp（XS/SM）：需换行才能显示完整课名
+        val titleMaxLines = when {
+            course.rowSpan >= 2 -> 3
+            widthDp >= 48f      -> 1
+            else                -> 2
+        }
+
+        val styles = rememberSafeCourseCardStyles(
+            cardWidthDp   = widthDp,
+            cardHeightDp  = heightDp,
+            titleMaxLines = titleMaxLines,
+        )
+
         val isTall = course.rowSpan >= 2
 
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = if (isTall) Arrangement.spacedBy(2.dp) else Arrangement.Top
         ) {
-            // ── 课程名称（始终显示）────────────────────────────────
-            // maxLines：单格最多 3 行（高度充裕），多格可适当放更多
             Text(
-                text = course.name.toHalfWidth(),
-                style = styles.title,
-                color = Color.White,
-                softWrap = true
+                text     = course.name.toHalfWidth(),
+                style    = styles.title,
+                color    = Color.White,
+                maxLines = titleMaxLines,
+                overflow = TextOverflow.Ellipsis,
             )
 
-            // ── 教室（非空时显示，所有卡片均展示）─────────────────
             if (course.room.isNotEmpty()) {
                 Text(
-                    text = course.room.toHalfWidth(),
-                    style = styles.room,
-                    color = Color.White.copy(alpha = 0.92f),
-                    softWrap = true
+                    text     = course.room.toHalfWidth(),
+                    style    = styles.room,
+                    color    = Color.White.copy(alpha = 0.92f)
                 )
             }
 
-            // ── 教师（非空时显示，所有卡片均展示）─────────────────
             if (course.teacher.isNotEmpty()) {
                 Text(
-                    text = course.teacher.toHalfWidth(),
-                    style = styles.teacher,
-                    color = Color.White.copy(alpha = 0.80f),
-                    softWrap = true
+                    text     = course.teacher.toHalfWidth(),
+                    style    = styles.teacher,
+                    color    = Color.White.copy(alpha = 0.80f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -581,13 +584,11 @@ fun CourseTopAppBar(
     dayFormat: String,
     onMenuClick: () -> Unit,
 ) {
-    // 使用 BoxWithConstraints 动态获取屏幕宽度
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        // 1. 计算当前卡片的内容宽度 (逻辑同步自 Type.kt)
+        // 计算当前卡片内容宽度（逻辑与 CourseType.kt 档位断点同步）
         val screenWidth = maxWidth.value
-        val cardContentWidth = (screenWidth - 50f) / 7f - 10f
+        val cardContentWidth = (screenWidth - CourseLayout.TimeColWidth.value) / 7f - 10f
 
-        // 2. 匹配档位名称
         val levelName = when {
             cardContentWidth < 36f -> "极窄屏"
             cardContentWidth < 48f -> "窄屏"
@@ -595,7 +596,7 @@ fun CourseTopAppBar(
             else -> "宽屏"
         }
 
-        Column(modifier = Modifier) {
+        Column {
             CenterAlignedTopAppBar(
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -622,38 +623,37 @@ fun CourseTopAppBar(
                 navigationIcon = {
                     IconButton(
                         onClick = onMenuClick,
-                        modifier = Modifier.width(56.dp)
+                        modifier = Modifier.width(CourseLayout.MenuIconButtonWidth)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "菜单",
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(CourseLayout.MenuIconSize)
                             )
                             Text(
                                 text = "菜单",
-                                style = AppTextStyle.menuIconLabel
+                                style = CourseTextStyle.menuIconLabel
                             )
                         }
                     }
                 },
-                // ✨ 新增 actions：在导航栏右上角渲染档位标签
                 actions = {
                     Box(
                         modifier = Modifier
-                            .padding(end = 12.dp)
+                            .padding(end = CourseLayout.LevelBadgePaddingEnd)
                             .background(
                                 color = MaterialTheme.colorScheme.secondaryContainer,
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(CourseLayout.LevelBadgeCorner)
                             )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(
+                                horizontal = CourseLayout.LevelBadgePaddingH,
+                                vertical = CourseLayout.LevelBadgePaddingV
+                            )
                     ) {
                         Text(
                             text = levelName,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Black,
-                                fontSize = 10.sp
-                            ),
+                            style = CourseTextStyle.levelBadge,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
@@ -723,8 +723,7 @@ fun AppNavigationDrawer(
     }
 
     BoxWithConstraints {
-        // 抽屉宽度：屏幕 75%，最大不超过 360dp（适配平板不过宽）
-        val drawerWidth = (maxWidth * 0.75f).coerceAtMost(360.dp)
+        val drawerWidth = (maxWidth * 0.75f).coerceAtMost(CourseLayout.DrawerMaxWidth)
 
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -779,7 +778,7 @@ fun AppNavigationDrawer(
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent
                         ),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(CourseLayout.DrawerItemCorner),
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                     )
 
@@ -815,7 +814,7 @@ fun AppNavigationDrawer(
                                 selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 unselectedContainerColor = Color.Transparent,
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(CourseLayout.DrawerItemCorner),
                             modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                         )
                     }
@@ -824,4 +823,84 @@ fun AppNavigationDrawer(
             content = content
         )
     }
+}
+
+// ─────────────────────────────────────────────
+// 预览数据
+// ─────────────────────────────────────────────
+
+object CoursePreviewData {
+    val mockTimeSlots = listOf(
+        TimeSlot(1, "08:30", "09:15"),
+        TimeSlot(2, "09:20", "10:05"),
+        TimeSlot(3, "10:25", "11:10"),
+        TimeSlot(4, "11:15", "12:00"),
+        TimeSlot(5, "14:00", "14:45")
+    )
+
+    val mockCourses = listOf(
+        CourseEntity(
+            id = 1, name = "高等数学", room = "教A-302", teacher = "张教授",
+            dayOfWeek = 1, startSection = 1, rowSpan = 2, weeks = "1-16",
+            studentId = "11111"
+        ),
+        CourseEntity(
+            id = 2, name = "移动终端开发实践", room = "实训楼 504", teacher = "李老师",
+            dayOfWeek = 2, startSection = 3, rowSpan = 2, weeks = "1-16",
+            studentId = "11111"
+        ),
+        CourseEntity(
+            id = 3, name = "大学英语(III)", room = "教C-101", teacher = "Wang.J",
+            dayOfWeek = 5, startSection = 1, rowSpan = 2, weeks = "1-16",
+            studentId = "11111"
+        )
+    )
+}
+
+@Composable
+fun CoursePreviewWrapper(widthDp: Int) {
+    MaterialTheme {
+        Surface(modifier = Modifier.width(widthDp.dp)) {
+            CourseScreenContent(
+                currentTime = "2026-03-24",
+                dayName = "星期二",
+                timeSlots = CoursePreviewData.mockTimeSlots,
+                courses = CoursePreviewData.mockCourses,
+                semesterStartMs = System.currentTimeMillis(),
+                onMenuClick = {}
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// 各种屏幕档位预览
+// ─────────────────────────────────────────────
+
+@Preview(name = "宽屏 - 手机横屏/平板", widthDp = 800, heightDp = 480, showBackground = true)
+@Composable
+fun PreviewWide() { CoursePreviewWrapper(800) }
+
+@Preview(name = "中屏 - 标准现代手机", widthDp = 411, heightDp = 891, showBackground = true)
+@Composable
+fun PreviewMedium() { CoursePreviewWrapper(411) }
+
+@Preview(name = "窄屏 - 小型设备", widthDp = 320, heightDp = 640, showBackground = true)
+@Composable
+fun PreviewNarrow() { CoursePreviewWrapper(320) }
+
+@Preview(name = "极窄屏 - 折叠屏外屏", widthDp = 240, heightDp = 640, showBackground = true)
+@Composable
+fun PreviewUltraNarrow() { CoursePreviewWrapper(240) }
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewLoading() {
+    MaterialTheme { CourseLoadingContent(onMenuClick = {}) }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewNoUser() {
+    MaterialTheme { CourseNoUserContent(onMenuClick = {}) }
 }

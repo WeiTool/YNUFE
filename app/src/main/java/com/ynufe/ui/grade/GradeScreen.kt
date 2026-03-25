@@ -32,9 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.grade.GradeEntity
+import com.ynufe.ui.theme.GradeLayout
 import com.ynufe.utils.GradeUiState
 
 // ─────────────────────────────────────────────────────────────────
@@ -43,11 +43,8 @@ import com.ynufe.utils.GradeUiState
 
 @Composable
 fun GradeScreen(gradeViewModel: GradeViewModel = hiltViewModel()) {
-    // 1. 收集 UI 状态
     val uiState by gradeViewModel.uiState.collectAsState()
-    // 2. 收集搜索文本状态
     val searchQuery by gradeViewModel.searchQuery.collectAsState()
-    // 3. 收集当前的筛选模式状态 (全部/及格/不及格)
     val filterStatus by gradeViewModel.filterStatus.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -80,8 +77,8 @@ fun GradeScreenContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(GradeLayout.ContentPadding),
+        verticalArrangement = Arrangement.spacedBy(GradeLayout.ItemSpacing)
     ) {
         // 顶部公共 UI：标题、搜索框、筛选按钮
         item {
@@ -92,22 +89,21 @@ fun GradeScreenContent(
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(GradeLayout.TitleToSearchSpacing))
 
-                // 搜索框
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = onQueryChange,
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("搜索课程...") },
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(GradeLayout.SearchBarCorner)
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(GradeLayout.SearchToFilterSpacing))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(GradeLayout.FilterChipSpacing)
                 ) {
                     FilterChip(
                         selected = currentFilter == GradeFilter.ALL,
@@ -119,7 +115,13 @@ fun GradeScreenContent(
                         onClick = { onFilterChange(GradeFilter.PASSED) },
                         label = { Text("过的") },
                         leadingIcon = if (currentFilter == GradeFilter.PASSED) {
-                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(GradeLayout.EmptySearchIconSize / 2.67f)
+                                )
+                            }
                         } else null
                     )
                     FilterChip(
@@ -131,31 +133,36 @@ fun GradeScreenContent(
                             selectedContainerColor = MaterialTheme.colorScheme.errorContainer
                         ),
                         leadingIcon = if (currentFilter == GradeFilter.FAILED) {
-                            { Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(GradeLayout.EmptySearchIconSize / 2.67f)
+                                )
+                            }
                         } else null
                     )
                 }
             }
         }
 
-        // 列表内容判断
         if (grades.isEmpty()) {
-            // 当搜索或筛选导致结果为空时，显示局部占位图
+            // 搜索/筛选结果为空时的局部占位图
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 64.dp),
+                        .padding(top = GradeLayout.EmptySearchTopPadding),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Inbox,
                         contentDescription = null,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(GradeLayout.EmptySearchIconSize),
                         tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(GradeLayout.EmptySearchIconToTextSpacing))
                     Text(
                         text = "未找到相关成绩记录",
                         style = MaterialTheme.typography.bodyMedium,
@@ -164,35 +171,31 @@ fun GradeScreenContent(
                 }
             }
         } else {
-            // 有数据时正常渲染列表
             items(grades) { grade ->
                 GradeItemCard(grade)
             }
         }
     }
 }
+
 @Composable
 fun GradeItemCard(grade: GradeEntity) {
-    // 将字符串分数转为数字，转换失败则默认为 0
     val scoreValue = grade.score.toDoubleOrNull() ?: 0.0
-    // 判断是否及格
     val isPassed = scoreValue >= 60.0
 
-    // 根据结果选择颜色
     val scoreColor = if (isPassed) {
         Color(0xFF008000)
     } else {
-        // 不及格显示红色
         MaterialTheme.colorScheme.error
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = GradeLayout.CardElevation)
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(GradeLayout.ContentPadding)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -234,15 +237,15 @@ fun GradeSkeletonList() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(GradeLayout.ContentPadding),
+        verticalArrangement = Arrangement.spacedBy(GradeLayout.ItemSpacing)
     ) {
         repeat(6) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .height(GradeLayout.SkeletonCardHeight),
+                shape = RoundedCornerShape(GradeLayout.SkeletonCardCorner),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 )
@@ -265,10 +268,10 @@ fun EmptyGradeContent() {
         Icon(
             imageVector = Icons.Default.Inbox,
             contentDescription = null,
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier.size(GradeLayout.EmptyStateIconSize),
             tint = MaterialTheme.colorScheme.outline
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(GradeLayout.EmptyStateIconToTitleSpacing))
         Text(
             text = "暂无成绩记录",
             style = MaterialTheme.typography.titleMedium,
@@ -298,7 +301,7 @@ fun GradeErrorContent(message: String) {
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.error
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(GradeLayout.EmptyStateIconToTitleSpacing / 2))
         Text(
             text = message,
             style = MaterialTheme.typography.bodySmall,
