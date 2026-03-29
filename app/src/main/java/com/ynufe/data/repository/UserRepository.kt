@@ -1,15 +1,14 @@
 package com.ynufe.data.repository
 
-import com.ynufe.data.api.ApiServices
+import com.ynufe.data.api.AppApi
 import com.ynufe.data.room.user.UserDao
 import com.ynufe.data.room.userInfo.UserDeleteDao
-import com.ynufe.data.room.userInfo.UserInfoDao
 import com.ynufe.utils.LoginResult
 import javax.inject.Inject
 
 class UserRepository @Inject constructor(
     private val loginSystem: LoginSystem,
-    private val apiServices: ApiServices,
+    private val appApi: AppApi,
     private val parser: ParseJsp,
     private val deleteDao: UserDeleteDao,
     private val userDao: UserDao,
@@ -36,7 +35,7 @@ class UserRepository @Inject constructor(
 
     private suspend fun fetchAndSaveUserInfo(): Boolean {
         return try {
-            val response = apiServices.getMainPage()
+            val response = appApi.getMainPage()
             if (response.isSuccessful) {
                 val html = response.body() ?: ""
                 if (html.isNotEmpty()) {

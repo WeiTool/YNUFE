@@ -1,15 +1,15 @@
 package com.ynufe.data.repository
 
-import com.ynufe.data.api.ApiServices
+import android.util.Log
+import com.ynufe.data.api.AppApi
 import com.ynufe.di.MemoryCookieJar
 import com.ynufe.utils.EncodeUtils
 import com.ynufe.utils.LoginResult
 import retrofit2.Response
 import javax.inject.Inject
-import android.util.Log // 建议加上日志以便调试
 
 class LoginSystem @Inject constructor(
-    private val apiServices: ApiServices,
+    private val appApi: AppApi,
     private val encoder: EncodeUtils,
     private val parser: ParseJsp,
     private val cookieJar: MemoryCookieJar
@@ -39,7 +39,7 @@ class LoginSystem @Inject constructor(
     }
 
     private suspend fun prepareFirstFlow(): ByteArray? = runCatching {
-        val homeResponse = apiServices.firstInterWeb()
+        val homeResponse = appApi.firstInterWeb()
         if (!homeResponse.isSuccessful) return@runCatching null
 
         val captchaBytes = fetchVerifyCode() ?: return@runCatching null
@@ -50,7 +50,7 @@ class LoginSystem @Inject constructor(
     }.onFailure { Log.e("LoginSystem", "First flow error: ${it.message}") }.getOrNull()
 
     private suspend fun prepareSecondFlow(): ByteArray? = runCatching {
-        val homeResponse = apiServices.secondeInterWeb()
+        val homeResponse = appApi.secondeInterWeb()
         if (!homeResponse.isSuccessful) return@runCatching null
 
         fetchVerifyCode()
@@ -97,12 +97,12 @@ class LoginSystem @Inject constructor(
     // ----------------------------------------------------------------
 
     suspend fun fetchVerifyCode(): ByteArray? = runCatching {
-        val response = apiServices.getVerifyCode()
+        val response = appApi.getVerifyCode()
         if (response.isSuccessful) response.body()?.bytes() else null
     }.getOrNull()
 
     private suspend fun fetchSessData(): String? = runCatching {
-        val response = apiServices.initSession()
+        val response = appApi.initSession()
         if (response.isSuccessful) {
             val body = response.body()
             if (body == null || body == "no") null else body
@@ -119,7 +119,7 @@ class LoginSystem @Inject constructor(
         code: String
     ): Response<String>? = runCatching {
         val finalEncoded = encoder.getFirstEncode(userAccount, userPassword, sessData)
-        apiServices.firstPostUser(
+        appApi.firstPostUser(
             fields = mutableMapOf(
                 "yncjLogon"    to "",
                 "userAccount"  to userAccount,
@@ -136,7 +136,7 @@ class LoginSystem @Inject constructor(
         code: String
     ): Response<String>? = runCatching {
         val finalEncoded = encoder.getSecondeEncode(userAccount, userPassword)
-        apiServices.secondePostUser(
+        appApi.secondePostUser(
             fields = mutableMapOf(
                 "yncjLogon"    to "",
                 "userAccount"  to userAccount,
@@ -153,7 +153,7 @@ class LoginSystem @Inject constructor(
 
     suspend fun logout() {
         runCatching {
-            apiServices.logoutSystem(tktime = System.currentTimeMillis())
+            appApi.logoutSystem(tktime = System.currentTimeMillis())
         }
         // 无论网络请求是否成功，必须清理本地 Cookie
         cookieJar.clear()

@@ -1,7 +1,7 @@
 package com.ynufe.data.repository
 
 import com.google.gson.Gson
-import com.ynufe.data.api.ApiServices
+import com.ynufe.data.api.WlanApi
 import com.ynufe.data.model.TokenResponse
 import com.ynufe.data.model.WlanUserInfoResponse
 import com.ynufe.data.room.wlan.UserWlanInfoDao
@@ -19,7 +19,7 @@ import java.util.Locale
 import javax.inject.Inject
 
 class WlanRepository @Inject constructor(
-    private val apiServices: ApiServices,
+    private val wlanApi: WlanApi,
     private val wlanUserDao: UserWlanInfoDao,
     private val cryptoManager: CryptoManager,
     private val gson: Gson,
@@ -64,7 +64,7 @@ class WlanRepository @Inject constructor(
 
     suspend fun getToken(username: String, time: String): LoginResult {
         return try {
-            val response = apiServices.getToken(username, time)
+            val response = wlanApi.getToken(username, time)
 
             if (response.isSuccessful) {
                 val tokenData = response.body()
@@ -133,7 +133,7 @@ class WlanRepository @Inject constructor(
             }.sha1()
 
             // 发起登录请求阶段
-            val response = apiServices.loginWlan(
+            val response = wlanApi.loginWlan(
                 username = usernameWithTag,
                 password = "{MD5}$hmd5",
                 chksum = checksum,
@@ -154,7 +154,7 @@ class WlanRepository @Inject constructor(
                             // 尝试 3 次同步，每次间隔 1 秒，解决服务器更新不及时的问题
                             repeat(3) { attempt ->
                                 delay(1000L * (attempt + 1))
-                                val infoResponse = apiServices.wlanUserInfo(System.currentTimeMillis().toString())
+                                val infoResponse = wlanApi.wlanUserInfo(System.currentTimeMillis().toString())
                                 if (infoResponse.isSuccessful && infoResponse.body() != null) {
                                     infoBody = infoResponse.body()
                                     return@repeat // 成功取到数据，跳出循环
@@ -214,7 +214,7 @@ class WlanRepository @Inject constructor(
             val savedLocation = wlanUserDao.getLocationById(studentId) ?: ""
             val fullUsername = studentId + savedLocation
 
-            val response = apiServices.logoutWlan(
+            val response = wlanApi.logoutWlan(
                 username = fullUsername,
                 ip = ip,
                 time = System.currentTimeMillis().toString()

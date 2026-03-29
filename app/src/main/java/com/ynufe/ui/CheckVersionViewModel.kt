@@ -32,6 +32,13 @@ class CheckVersionViewModel @Inject constructor(
         }
     }
 
+    fun forceCheckForUpdates() {
+        viewModelScope.launch {
+            // 直接调用 repository.checkUpdate()，跳过 shouldCheckUpdate() 的判断
+            updateState = repository.checkUpdate(force = true)
+        }
+    }
+
     fun dismissDialog() {
         updateState = UpdateResult.NoUpdate
     }

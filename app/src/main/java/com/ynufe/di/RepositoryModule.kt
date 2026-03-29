@@ -2,7 +2,9 @@ package com.ynufe.di
 
 import android.content.Context
 import com.google.gson.Gson
-import com.ynufe.data.api.ApiServices
+import com.ynufe.data.api.AppApi
+import com.ynufe.data.api.VersionApi
+import com.ynufe.data.api.WlanApi
 import com.ynufe.data.repository.CheckVersionRepository
 import com.ynufe.data.repository.CourseRepository
 import com.ynufe.data.repository.GradeRepository
@@ -37,34 +39,34 @@ object RepositoryModule {
     @Provides
     @Singleton
     fun provideLoginSystem(
-        apiServices: ApiServices,
+        appApi: AppApi,
         encoder: EncodeUtils,
         parser: ParseJsp,
         cookieJar: MemoryCookieJar
     ): LoginSystem {
-        return LoginSystem(apiServices, encoder, parser, cookieJar)
+        return LoginSystem(appApi, encoder, parser, cookieJar)
     }
 
     @Provides
     @Singleton
     fun provideUserRepository(
         loginSystem: LoginSystem,
-        apiServices: ApiServices,
+        appApi: AppApi,
         parser: ParseJsp,
         deleteDao: UserDeleteDao,
         userDao: UserDao,
     ): UserRepository {
-        return UserRepository(loginSystem, apiServices, parser, deleteDao, userDao)
+        return UserRepository(loginSystem, appApi, parser, deleteDao, userDao)
     }
 
     @Provides
     @Singleton
     fun provideCourseRepository(
-        apiServices: ApiServices,
+        appApi: AppApi,
         parser: ParseJsp,
         courseDao: CourseDao
     ): CourseRepository {
-        return CourseRepository(apiServices, parser, courseDao)
+        return CourseRepository(appApi, parser, courseDao)
     }
 
     @Provides
@@ -72,29 +74,29 @@ object RepositoryModule {
     fun provideGradeRepository(
         gradeDao: GradeDao,
         parser: ParseJsp,
-        apiServices: ApiServices
+        appApi: AppApi
     ): GradeRepository {
-        return GradeRepository(gradeDao, parser, apiServices)
+        return GradeRepository(gradeDao, parser, appApi)
     }
 
     @Provides
     @Singleton
     fun provideCheckVersionRepository(
-        apiServices: ApiServices,
+        versionApi: VersionApi,
         @ApplicationContext context: Context
     ): CheckVersionRepository {
-        return CheckVersionRepository(apiServices, context)
+        return CheckVersionRepository(versionApi, context)
     }
 
     @Provides
     @Singleton
     fun provideWlanRepository(
-        apiServices: ApiServices,
+        wlanApi: WlanApi,
         wlanUserDao: UserWlanInfoDao,
         cryptoManager: CryptoManager,
         gson: Gson,
         tea: TEA
     ): WlanRepository {
-        return WlanRepository(apiServices, wlanUserDao, cryptoManager,gson, tea)
+        return WlanRepository(wlanApi, wlanUserDao, cryptoManager,gson, tea)
     }
 }

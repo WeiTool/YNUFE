@@ -1,6 +1,6 @@
 package com.ynufe.data.repository
 
-import com.ynufe.data.api.ApiServices
+import com.ynufe.data.api.AppApi
 import com.ynufe.data.room.grade.GradeDao
 import com.ynufe.utils.LoginResult
 import javax.inject.Inject
@@ -8,11 +8,11 @@ import javax.inject.Inject
 class GradeRepository @Inject constructor(
     private val gradeDao: GradeDao,
     private val parser: ParseJsp,
-    private val apiServices: ApiServices
+    private val appApi: AppApi,
 ) {
     suspend fun getGradeTable(studentId: String): LoginResult {
         return try {
-            val response = apiServices.getGradeTable(
+            val response = appApi.getGradeTable(
                 fields = mutableMapOf(
                     "kksj" to "",
                     "kcxz" to "",

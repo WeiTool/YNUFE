@@ -1,18 +1,18 @@
 package com.ynufe.data.repository
 
-import com.ynufe.data.api.ApiServices
+import com.ynufe.data.api.AppApi
 import com.ynufe.data.room.course.CourseDao
 import com.ynufe.utils.LoginResult
 import javax.inject.Inject
 
 class CourseRepository @Inject constructor(
-    private val apiServices: ApiServices,
+    private val appApi: AppApi,
     private val parser: ParseJsp,
     private val courseDao: CourseDao
 ) {
     suspend fun getCourseTable(studentId: String): LoginResult {
         return try {
-            val response = apiServices.getCourseTable()
+            val response = appApi.getCourseTable()
             if (response.isSuccessful) {
                 val html = response.body() ?: ""
                 if (html.isNotEmpty()) {
