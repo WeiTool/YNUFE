@@ -36,7 +36,8 @@ class GradeRepository @Inject constructor(
         }
     }
 
-    fun getGradesByStudentId(studentId: String) = gradeDao.getGradesByStudentId(studentId)
+    // 提供给View
+    fun getGradesByStudentId(studentId: String) = gradeDao.getGradesByStudentId(studentId) // 获取学生成绩
     suspend fun deleteGradesByStudentId(studentId: String) =
-        gradeDao.deleteGradesByStudentId(studentId)
+        gradeDao.deleteGradesByStudentId(studentId) // 删除学生所有成绩
 }

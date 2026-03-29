@@ -5,8 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ynufe.data.repository.CourseRepository
+import com.ynufe.data.repository.UserRepository
 import com.ynufe.data.room.course.CourseDao
-import com.ynufe.data.room.user.UserDao
 import com.ynufe.utils.CourseUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,8 +29,8 @@ data class TimeSlot(
 
 @HiltViewModel
 class CourseViewModel @Inject constructor(
-    private val courseDao: CourseDao,
-    private val userDao: UserDao,
+    private val courseRepository: CourseRepository,
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     // ── 校区时间表（纯 UI 状态，无需持久化）──────────────────
@@ -62,12 +63,12 @@ class CourseViewModel @Inject constructor(
         }
     }
 
-    // ── 学期开始日期（写入 DB，由 uiState 中的 semesterStartMs 观察）
+    // ── 学期上课日期（写入 DB，由 uiState 中的 semesterStartMs 观察）
 
     fun updateSemesterStart(newStartTime: Long) {
         viewModelScope.launch {
-            val user = userDao.getUser().firstOrNull()
-            user?.let { userDao.updateUserStartTime(it.studentId, newStartTime) }
+            val user = userRepository.getIsActiveUser.firstOrNull()
+            user?.let { userRepository.updateUserStartTime(it.studentId, newStartTime) }
         }
     }
 
@@ -88,11 +89,11 @@ class CourseViewModel @Inject constructor(
      *   StateFlow 始终持有最新值，切回 Tab 立即恢复 Success，无闪烁。
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<CourseUiState> = userDao.getUser()
+    val uiState: StateFlow<CourseUiState> = userRepository.getIsActiveUser
         .flatMapLatest { user ->
             when {
                 user == null -> flowOf(CourseUiState.NoUser)
-                else -> courseDao.getCoursesByStudentId(user.studentId)
+                else -> courseRepository.getCoursesByStudentId(user.studentId)
                     .map { courses ->
                         if (courses.isEmpty()) {
                             CourseUiState.Empty(classBeginTime = user.startTime)

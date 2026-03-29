@@ -33,9 +33,9 @@ class UserViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val courseRepository: CourseRepository,
     private val gradeRepository: GradeRepository,
-    private val userDao: UserDao,
     private val userInfoDao: UserInfoDao,
     private val cryptoManager: CryptoManager,
+    private val userDao: UserDao
 ) : ViewModel() {
 
     // ── 对话框专用：验证码图片 ──────────────────────────────
@@ -43,10 +43,9 @@ class UserViewModel @Inject constructor(
     val verifyCodeImage: State<ByteArray?> = _verifyCodeImage
 
     // ── 对话框专用：所有已保存账号列表 ───────────────────────
-    val allUsers: StateFlow<List<UserEntity>> = userDao.getAllUsers()
+    val allUsers: StateFlow<List<UserEntity>> = userRepository.getAllUsers
         .stateIn(
             scope = viewModelScope,
-            // Eagerly：ViewModel 创建即开始收集，切 Tab 后无需重启
             started = SharingStarted.Eagerly,
             initialValue = emptyList()
         )
@@ -68,7 +67,7 @@ class UserViewModel @Inject constructor(
      * Eagerly：上游永不停止，StateFlow 始终持有最新值，
      * 切回 Tab 时 collectAsState() 立刻获得当前状态，不会重置回 Pair(false, null)。
      */
-    private val _dbState = userDao.getUser()
+    private val _dbState = userRepository.getIsActiveUser
         .map { Pair(true, it) }
         .stateIn(
             scope = viewModelScope,
@@ -81,7 +80,7 @@ class UserViewModel @Inject constructor(
      * Eagerly 保证切 Tab 后不会因上游停止而在回来时重新发出 null。
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val _userInfo = userDao.getUser()
+    private val _userInfo = userRepository.getIsActiveUser
         .flatMapLatest { user ->
             if (user == null) flowOf(null)
             else userInfoDao.getUserInfoByStudentId(user.studentId)
@@ -198,10 +197,19 @@ class UserViewModel @Inject constructor(
         }
     }
 
+    fun decryptPassword(encrypted: String): String {
+        return try {
+            cryptoManager.decrypt(encrypted)
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
     fun saveUserAccount(studentId: String, password: String) {
         viewModelScope.launch {
+            // 这里的 password 是 UI 传来的明文
             val encryptedPassword = cryptoManager.encrypt(password)
-            userDao.deactivateAllUsers()
+            userRepository.deactivateAllUsers()
             userDao.insertUser(
                 UserEntity(studentId = studentId, password = encryptedPassword, isActive = true)
             )
@@ -212,8 +220,8 @@ class UserViewModel @Inject constructor(
         viewModelScope.launch {
             _isOperationLoading.value = true
             try {
-                userDao.deactivateAllUsers()
-                userDao.activateUser(studentId)
+                userRepository.deactivateAllUsers()
+                userRepository.activateUser(studentId)
                 delay(100)
             } finally {
                 _isOperationLoading.value = false

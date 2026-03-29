@@ -1,18 +1,23 @@
 package com.ynufe.di
 
 import android.content.Context
-import com.ynufe.data.repository.LoginSystem
-import com.ynufe.data.repository.ParseJsp
+import com.google.gson.Gson
 import com.ynufe.data.api.ApiServices
 import com.ynufe.data.repository.CheckVersionRepository
 import com.ynufe.data.repository.CourseRepository
 import com.ynufe.data.repository.GradeRepository
+import com.ynufe.data.repository.LoginSystem
+import com.ynufe.data.repository.ParseJsp
 import com.ynufe.data.repository.UserRepository
+import com.ynufe.data.repository.WlanRepository
 import com.ynufe.data.room.course.CourseDao
 import com.ynufe.data.room.grade.GradeDao
+import com.ynufe.data.room.user.UserDao
 import com.ynufe.data.room.userInfo.UserDeleteDao
-import com.ynufe.data.room.userInfo.UserInfoDao
+import com.ynufe.data.room.wlan.UserWlanInfoDao
+import com.ynufe.utils.CryptoManager
 import com.ynufe.utils.EncodeUtils
+import com.ynufe.utils.wlan.TEA
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,6 +29,11 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object RepositoryModule {
 
+    @Provides
+    @Singleton
+    fun provideGson(): Gson {
+        return Gson()
+    }
     @Provides
     @Singleton
     fun provideLoginSystem(
@@ -41,10 +51,10 @@ object RepositoryModule {
         loginSystem: LoginSystem,
         apiServices: ApiServices,
         parser: ParseJsp,
-        userInfoDao: UserInfoDao,
-        deleteDao: UserDeleteDao
+        deleteDao: UserDeleteDao,
+        userDao: UserDao,
     ): UserRepository {
-        return UserRepository(loginSystem, apiServices, parser, deleteDao, userInfoDao)
+        return UserRepository(loginSystem, apiServices, parser, deleteDao, userDao)
     }
 
     @Provides
@@ -53,7 +63,7 @@ object RepositoryModule {
         apiServices: ApiServices,
         parser: ParseJsp,
         courseDao: CourseDao
-    ): CourseRepository{
+    ): CourseRepository {
         return CourseRepository(apiServices, parser, courseDao)
     }
 
@@ -63,7 +73,7 @@ object RepositoryModule {
         gradeDao: GradeDao,
         parser: ParseJsp,
         apiServices: ApiServices
-    ): GradeRepository{
+    ): GradeRepository {
         return GradeRepository(gradeDao, parser, apiServices)
     }
 
@@ -76,4 +86,15 @@ object RepositoryModule {
         return CheckVersionRepository(apiServices, context)
     }
 
+    @Provides
+    @Singleton
+    fun provideWlanRepository(
+        apiServices: ApiServices,
+        wlanUserDao: UserWlanInfoDao,
+        cryptoManager: CryptoManager,
+        gson: Gson,
+        tea: TEA
+    ): WlanRepository {
+        return WlanRepository(apiServices, wlanUserDao, cryptoManager,gson, tea)
+    }
 }

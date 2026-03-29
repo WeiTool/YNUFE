@@ -3,7 +3,7 @@ package com.ynufe.ui.grade
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ynufe.data.repository.GradeRepository
-import com.ynufe.data.room.user.UserDao
+import com.ynufe.data.repository.UserRepository
 import com.ynufe.utils.GradeUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -19,7 +19,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class GradeViewModel @Inject constructor(
-    private val gradeRepository: GradeRepository, userDao: UserDao
+    private val gradeRepository: GradeRepository,
+    userRepository: UserRepository
 ) : ViewModel() {
 
     val searchQuery = MutableStateFlow("")
@@ -43,7 +44,7 @@ class GradeViewModel @Inject constructor(
      *   只会在 App 启动的极短瞬间显示一次，之后不再重复触发。
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<GradeUiState> = userDao.getUser().flatMapLatest { currentUser ->
+    val uiState: StateFlow<GradeUiState> = userRepository.getIsActiveUser.flatMapLatest { currentUser ->
         val studentId = currentUser?.studentId ?: ""
         if (studentId.isEmpty()) return@flatMapLatest flowOf(GradeUiState.Empty)
 

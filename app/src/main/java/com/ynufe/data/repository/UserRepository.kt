@@ -1,6 +1,7 @@
 package com.ynufe.data.repository
 
 import com.ynufe.data.api.ApiServices
+import com.ynufe.data.room.user.UserDao
 import com.ynufe.data.room.userInfo.UserDeleteDao
 import com.ynufe.data.room.userInfo.UserInfoDao
 import com.ynufe.utils.LoginResult
@@ -11,7 +12,7 @@ class UserRepository @Inject constructor(
     private val apiServices: ApiServices,
     private val parser: ParseJsp,
     private val deleteDao: UserDeleteDao,
-    userInfoDao: UserInfoDao,
+    private val userDao: UserDao,
 ) {
     // 登录准备（供 UI 获取验证码图片）
     suspend fun prepareLogin(): ByteArray? = loginSystem.prepareLogin()
@@ -50,8 +51,19 @@ class UserRepository @Inject constructor(
 
     suspend fun logout() = loginSystem.logout()
 
-    // 本地数据访问
-    val userInfo = userInfoDao.getUserInfoFlow()
-    suspend fun deleteUser(studentId: String) = deleteDao.deleteUser(studentId)
-    suspend fun deleteAllUserInfo(studentId: String) = deleteDao.deleteAllUserInfo(studentId)
+    // 提供给viewmodel
+    val getIsActiveUser = userDao.getIsActiveUser() // 获取当前活动User
+
+    val getIsActiveUserStudentId = userDao.getIsActiveUserStudentId() // 获取当前活动User学号
+
+    val getAllUsers = userDao.getAllUsers() // 获取所有User
+
+    suspend fun deactivateAllUsers() = userDao.deactivateAllUsers() // 将所有用户设为非激活
+
+    suspend fun activateUser(studentId: String) = userDao.activateUser(studentId) // 激活指定用户
+
+    suspend fun updateUserStartTime(id: String, time: Long) = userDao.updateUserStartTime(id, time) // 更新用户上课时间
+
+    suspend fun deleteUser(studentId: String) = deleteDao.deleteUser(studentId) // 删除指定学号的用户信息
+    suspend fun deleteAllUserInfo(studentId: String) = deleteDao.deleteAllUserInfo(studentId) // 删除指定学号的用户信息，包括课程表、成绩表和用户表
 }

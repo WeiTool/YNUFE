@@ -21,7 +21,8 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "ynufe_database"
-        ).build()
+        )
+            .build()
     }
 
     @Provides
@@ -38,5 +39,8 @@ object DatabaseModule {
 
     @Provides
     fun provideGradeDao(db: AppDatabase) = db.gradeDao()
+
+    @Provides
+    fun provideUserWlanInfoDao(db: AppDatabase) = db.userWlanInfoDao()
 
 }

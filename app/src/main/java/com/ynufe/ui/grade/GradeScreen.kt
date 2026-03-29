@@ -1,5 +1,14 @@
 package com.ynufe.ui.grade
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,7 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -36,13 +45,24 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.grade.GradeEntity
 import com.ynufe.ui.theme.GradeLayout
 import com.ynufe.utils.GradeUiState
+import kotlin.math.absoluteValue
 
 // ─────────────────────────────────────────────────────────────────
 // 入口：从 ViewModel 收集 uiState 并分发
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
-fun GradeScreen(gradeViewModel: GradeViewModel = hiltViewModel()) {
+fun GradeScreen(
+    gradeViewModel: GradeViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    onBack: () -> Unit,
+) {
+    // 使用 BackHandler 拦截系统返回键
+    BackHandler {
+        onBack()
+    }
+
     val uiState by gradeViewModel.uiState.collectAsState()
     val searchQuery by gradeViewModel.searchQuery.collectAsState()
     val filterStatus by gradeViewModel.filterStatus.collectAsState()
@@ -56,8 +76,11 @@ fun GradeScreen(gradeViewModel: GradeViewModel = hiltViewModel()) {
                 searchQuery = searchQuery,
                 currentFilter = filterStatus,
                 onQueryChange = { gradeViewModel.onSearchQueryChange(it) },
-                onFilterChange = { gradeViewModel.onFilterChange(it) }
+                onFilterChange = { gradeViewModel.onFilterChange(it) },
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
+
             is GradeUiState.Error -> GradeErrorContent(state.message)
         }
     }
@@ -67,112 +90,138 @@ fun GradeScreen(gradeViewModel: GradeViewModel = hiltViewModel()) {
 // GradeUiState.Success → 成绩列表
 // ─────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GradeScreenContent(
     grades: List<GradeEntity>,
     searchQuery: String,
     currentFilter: GradeFilter,
     onQueryChange: (String) -> Unit,
-    onFilterChange: (GradeFilter) -> Unit
+    onFilterChange: (GradeFilter) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(GradeLayout.ContentPadding),
-        verticalArrangement = Arrangement.spacedBy(GradeLayout.ItemSpacing)
-    ) {
-        // 顶部公共 UI：标题、搜索框、筛选按钮
-        item {
-            Column {
-                Text(
-                    text = "学业成绩单",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(GradeLayout.TitleToSearchSpacing))
-
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = onQueryChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("搜索课程...") },
-                    shape = RoundedCornerShape(GradeLayout.SearchBarCorner)
-                )
-
-                Spacer(modifier = Modifier.height(GradeLayout.SearchToFilterSpacing))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(GradeLayout.FilterChipSpacing)
-                ) {
-                    FilterChip(
-                        selected = currentFilter == GradeFilter.ALL,
-                        onClick = { onFilterChange(GradeFilter.ALL) },
-                        label = { Text("全部") }
-                    )
-                    FilterChip(
-                        selected = currentFilter == GradeFilter.PASSED,
-                        onClick = { onFilterChange(GradeFilter.PASSED) },
-                        label = { Text("过的") },
-                        leadingIcon = if (currentFilter == GradeFilter.PASSED) {
-                            {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(GradeLayout.EmptySearchIconSize / 2.67f)
-                                )
-                            }
-                        } else null
-                    )
-                    FilterChip(
-                        selected = currentFilter == GradeFilter.FAILED,
-                        onClick = { onFilterChange(GradeFilter.FAILED) },
-                        label = { Text("挂的") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedLabelColor = MaterialTheme.colorScheme.error,
-                            selectedContainerColor = MaterialTheme.colorScheme.errorContainer
-                        ),
-                        leadingIcon = if (currentFilter == GradeFilter.FAILED) {
-                            {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(GradeLayout.EmptySearchIconSize / 2.67f)
-                                )
-                            }
-                        } else null
-                    )
-                }
-            }
-        }
-
-        if (grades.isEmpty()) {
-            // 搜索/筛选结果为空时的局部占位图
+    with(sharedTransitionScope) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                // 1. 承接来自 ToolScreen 的共享元素动画
+                .sharedElement(
+                    rememberSharedContentState(key = "grade_container"),
+                    animatedVisibilityScope = animatedVisibilityScope
+                ),
+            contentPadding = PaddingValues(GradeLayout.ContentPadding),
+            verticalArrangement = Arrangement.spacedBy(GradeLayout.ItemSpacing)
+        ) {
+            // 顶部公共 UI
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = GradeLayout.EmptySearchTopPadding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Inbox,
-                        contentDescription = null,
-                        modifier = Modifier.size(GradeLayout.EmptySearchIconSize),
-                        tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(GradeLayout.EmptySearchIconToTextSpacing))
+                Column {
                     Text(
-                        text = "未找到相关成绩记录",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
+                        text = "学业成绩单",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
                     )
+
+                    Spacer(modifier = Modifier.height(GradeLayout.TitleToSearchSpacing))
+
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("搜索课程...") },
+                        shape = RoundedCornerShape(GradeLayout.SearchBarCorner)
+                    )
+
+                    Spacer(modifier = Modifier.height(GradeLayout.SearchToFilterSpacing))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(GradeLayout.FilterChipSpacing)
+                    ) {
+                        FilterChip(
+                            selected = currentFilter == GradeFilter.ALL,
+                            onClick = { onFilterChange(GradeFilter.ALL) },
+                            label = { Text("全部") }
+                        )
+                        FilterChip(
+                            selected = currentFilter == GradeFilter.PASSED,
+                            onClick = { onFilterChange(GradeFilter.PASSED) },
+                            label = { Text("过的") },
+                            leadingIcon = if (currentFilter == GradeFilter.PASSED) {
+                                {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(GradeLayout.EmptySearchIconSize / 2.67f)
+                                    )
+                                }
+                            } else null
+                        )
+                        FilterChip(
+                            selected = currentFilter == GradeFilter.FAILED,
+                            onClick = { onFilterChange(GradeFilter.FAILED) },
+                            label = { Text("挂的") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedLabelColor = MaterialTheme.colorScheme.error,
+                                selectedContainerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            leadingIcon = if (currentFilter == GradeFilter.FAILED) {
+                                {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(GradeLayout.EmptySearchIconSize / 2.67f)
+                                    )
+                                }
+                            } else null
+                        )
+                    }
                 }
             }
-        } else {
-            items(grades) { grade ->
-                GradeItemCard(grade)
+
+            if (grades.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = GradeLayout.EmptySearchTopPadding),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Inbox,
+                            contentDescription = null,
+                            modifier = Modifier.size(GradeLayout.EmptySearchIconSize),
+                            tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(GradeLayout.EmptySearchIconToTextSpacing))
+                        Text(
+                            text = "未找到相关成绩记录",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            } else {
+                // 2. 实现卡片从中间向上下展开的动效
+                itemsIndexed(grades) { index, grade ->
+                    // 假设中间位置为参考点，计算每个条目的延迟
+                    val middleIndex = 2
+                    val delay = (index - middleIndex).absoluteValue * 60
+
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(tween(400, delay)) +
+                                expandVertically(tween(500, delay)) +
+                                slideInVertically(tween(500, delay)) {
+                                    // 索引小于中间的向上滑出，大于中间的向下滑出
+                                    if (index < middleIndex) -200 else 200
+                                },
+                        label = "grade_item_appearance"
+                    ) {
+                        GradeItemCard(grade = grade)
+                    }
+                }
             }
         }
     }

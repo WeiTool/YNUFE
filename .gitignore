@@ -183,9 +183,6 @@ hs_err_pid*
 # AndroidX Navigation Safe Args generated files
 **/build/generated/source/navigation-args/
 
-# Room database schema versions (generated files)
-**/schemas/
-
 # Hilt generated components
 **/build/generated/source/hilt/
 

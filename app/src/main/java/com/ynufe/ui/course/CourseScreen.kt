@@ -240,7 +240,7 @@ fun CourseScreenContent(
     onMenuClick: () -> Unit,
     semesterStartMs: Long
 ) {
-    val pageCount = 20
+    val pageCount = 18
     val actualCurrentWeek = DateUtils.getCurrentWeekInt(semesterStartMs)
     val initialPage = (actualCurrentWeek - 1).coerceIn(0, pageCount - 1)
 

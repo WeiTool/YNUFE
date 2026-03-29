@@ -16,7 +16,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0.1"
+        versionName = "1.1.2"
 
         testInstrumentationRunner = "com.ynufe.HiltTestRunner"
     }
@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation("androidx.compose.animation:animation:1.10.6")
 
 
     // --- 网络与爬虫逻辑 ---

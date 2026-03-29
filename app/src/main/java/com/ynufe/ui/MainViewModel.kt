@@ -2,6 +2,7 @@ package com.ynufe.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ynufe.data.repository.UserRepository
 import com.ynufe.data.room.user.UserDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -17,8 +18,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val userDao: UserDao,
-    // courseDao 不再需要，已移除；若其他地方用到请保留
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     /**
@@ -37,7 +37,7 @@ class MainViewModel @Inject constructor(
      * 这样无论用户是新用户（空库）还是老用户，只要 Room 查询
      * 返回过一次，就视为"数据已就绪"，不会因为空结果卡在加载态。
      */
-    private val _dbReady: StateFlow<Boolean> = userDao.getUser()
+    private val _dbReady: StateFlow<Boolean> = userRepository.getIsActiveUser
         .map { true }           // 任意结果（包括 null）都代表 DB 已响应
         .onStart { emit(false) } // 初始发出 false，保证 combine 不等待第一次 emit
         .stateIn(

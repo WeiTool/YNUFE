@@ -3,7 +3,9 @@ package com.ynufe.di
 import android.annotation.SuppressLint
 import android.content.Context
 import coil.ImageLoader
+import com.google.gson.Gson
 import com.ynufe.data.api.ApiServices
+import com.ynufe.utils.wlan.JsonpConverterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -98,12 +100,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    fun provideRetrofit(okHttpClient: OkHttpClient , gson: Gson): Retrofit {
         return Retrofit.Builder()
             .baseUrl("https://xjwis.ynufe.edu.cn/")
             .client(okHttpClient)
             .addConverterFactory(ScalarsConverterFactory.create())
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(JsonpConverterFactory(gson))
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
     }
 

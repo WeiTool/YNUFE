@@ -6,6 +6,8 @@ import androidx.room.Transaction
 
 @Dao
 interface UserDeleteDao {
+
+    // 删除指定学号的用户信息，包括课程表、成绩表和用户表
     @Transaction
     suspend fun deleteAllUserInfo(studentId: String) {
         deleteCourseByStudentId(studentId)
@@ -14,10 +16,12 @@ interface UserDeleteDao {
         deleteGradeByStudentId(studentId)
     }
 
+    // 删除指定学号的用户信息
     @Transaction
     suspend fun deleteUser(studentId: String) {
         deleteUserInfoByStudentId(studentId)
     }
+
 
     @Query("DELETE FROM user WHERE studentId = :studentId")
     suspend fun deleteUserByStudentId(studentId: String)
@@ -30,4 +34,5 @@ interface UserDeleteDao {
 
     @Query("DELETE FROM grade WHERE studentId = :studentId")
     suspend fun deleteGradeByStudentId(studentId: String)
+
 }

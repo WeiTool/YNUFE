@@ -57,7 +57,7 @@ fun InfoScreen(
 
                 Type.UPDATE -> {
                     // 直接触发 MainActivity 已经在监听的更新逻辑
-                    checkViewModel.checkForUpdates()
+                    checkViewModel.checkForUpdatesIfNeed()
                 }
             }
         }

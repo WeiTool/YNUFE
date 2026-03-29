@@ -1,12 +1,13 @@
 package com.ynufe.ui
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ynufe.data.repository.CheckVersionRepository
-import com.ynufe.data.repository.UpdateResult
+import com.ynufe.utils.UpdateResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,9 +21,14 @@ class CheckVersionViewModel @Inject constructor(
     var updateState by mutableStateOf<UpdateResult>(UpdateResult.NoUpdate)
         private set
 
-    fun checkForUpdates() {
+    fun checkForUpdatesIfNeed() {
         viewModelScope.launch {
-            updateState = repository.checkUpdate()
+            // 先判断时间，如果不到 6 小时，直接 return 不走网络请求
+            if (repository.shouldCheckUpdate()) {
+                updateState = repository.checkUpdate()
+            } else {
+                Log.d("Update", "距离上次检查不足 6 小时，跳过请求")
+            }
         }
     }
 

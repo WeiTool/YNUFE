@@ -4,6 +4,7 @@ import com.ynufe.data.room.course.CourseEntity
 import com.ynufe.data.room.grade.GradeEntity
 import com.ynufe.data.room.user.UserEntity
 import com.ynufe.data.room.userInfo.UserInfoEntity
+import com.ynufe.data.room.wlan.UserWlanInfoEntity
 
 // ────────────────────────────────────────────────────────────
 // 网络 / 仓库层结果
@@ -14,12 +15,20 @@ sealed class LoginResult {
     data class Error(val message: String) : LoginResult()
 }
 
+sealed class UpdateResult {
+    data class HasUpdate(
+        val latestVersion: String,
+        val currentVersion: String,
+        val releaseNotes: String,
+        val downloadUrl: String?
+    ) : UpdateResult()
+
+    object NoUpdate : UpdateResult()
+    data class Error(val message: String) : UpdateResult()
+}
+
 // ────────────────────────────────────────────────────────────
 // 用户页 UI 状态
-//
-// Initializing → 数据库首次查询尚未完成，显示骨架屏
-// Empty        → 无绑定账号，显示引导空状态
-// Success      → 账号已加载；isOperationLoading 标识同步操作进行中
 // ────────────────────────────────────────────────────────────
 
 sealed class UserUiState {
@@ -34,18 +43,12 @@ sealed class UserUiState {
 
 // ────────────────────────────────────────────────────────────
 // 课程页 UI 状态
-//
-// Loading → 等待数据库首次返回
-// NoUser  → 未绑定任何账号
-// Empty   → 已绑定账号但尚未同步课表（附带 classBeginTime 供抽屉使用）
-// Success → 课表加载成功
 // ────────────────────────────────────────────────────────────
 
 sealed class CourseUiState {
     data object Loading : CourseUiState()
     data object NoUser : CourseUiState()
     data class Empty(val classBeginTime: Long?) : CourseUiState()
-
     data class Success(
         val courses: List<CourseEntity>,
         val classBeginTime: Long?
@@ -54,11 +57,6 @@ sealed class CourseUiState {
 
 // ────────────────────────────────────────────────────────────
 // 成绩页 UI 状态
-//
-// Loading → 等待数据库首次返回
-// Empty   → 暂无成绩记录
-// Success → 成绩列表加载成功
-// Error   → 加载出错
 // ────────────────────────────────────────────────────────────
 
 sealed class GradeUiState {
@@ -66,4 +64,20 @@ sealed class GradeUiState {
     data object Empty : GradeUiState()
     data class Success(val grades: List<GradeEntity>) : GradeUiState()
     data class Error(val message: String) : GradeUiState()
+}
+
+// ────────────────────────────────────────────────────────────
+// 校园网登陆 UI 状态
+//
+// Loading → 等待数据库首次返回
+// Empty   → 暂无记录
+// Success → 已有账号列表（每条附带可选的在线信息）
+// Error   → 加载出错
+// ────────────────────────────────────────────────────────────
+
+sealed class WlanUiState {
+    data object Loading : WlanUiState()
+    data object Empty : WlanUiState()
+    data class Success(val users: List<UserWlanInfoEntity>) : WlanUiState()
+    data class Error(val message: String) : WlanUiState()
 }
