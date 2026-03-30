@@ -1,4 +1,4 @@
-package com.ynufe.ui.theme
+package com.ynufe.ui.theme.type
 
 import androidx.compose.ui.unit.dp
 
@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.dp
 // 集中管理 InfoScreen 所需的全部尺寸与间距，
 // 禁止在 InfoScreen.kt 内硬编码 dp 数值。
 //
-// InfoScreen 通过 import com.ynufe.ui.theme.InfoLayout 引用本对象。
+// InfoScreen 通过 import com.ynufe.ui.theme.type.InfoLayout 引用本对象。
 // ═══════════════════════════════════════════════════════════════════
 object InfoLayout {
 

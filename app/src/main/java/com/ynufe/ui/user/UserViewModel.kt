@@ -221,7 +221,7 @@ class UserViewModel @Inject constructor(
             _isOperationLoading.value = true
             try {
                 userRepository.deactivateAllUsers()
-                userRepository.activateUser(studentId)
+                userRepository.setActivateUser(studentId)
                 delay(100)
             } finally {
                 _isOperationLoading.value = false

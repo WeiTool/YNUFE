@@ -72,9 +72,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.course.CourseEntity
 import com.ynufe.ui.theme.COURSE_COLORS
-import com.ynufe.ui.theme.CourseLayout
-import com.ynufe.ui.theme.CourseTextStyle
-import com.ynufe.ui.theme.rememberSafeCourseCardStyles
+import com.ynufe.ui.theme.type.CourseLayout
+import com.ynufe.ui.theme.type.CourseTextStyle
+import com.ynufe.ui.theme.type.rememberSafeCourseCardStyles
 import com.ynufe.utils.CourseUiState
 import com.ynufe.utils.DateUtils
 import com.ynufe.utils.DateUtils.formatDateMs

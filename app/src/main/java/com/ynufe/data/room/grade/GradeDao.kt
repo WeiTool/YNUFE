@@ -25,6 +25,7 @@ interface GradeDao {
     """)
     fun getGradesByStudentId(studentId: String): Flow<List<GradeEntity>>
 
+    // 删除用户成绩
     @Query("DELETE FROM grade WHERE studentId = :studentId")
     suspend fun deleteGradesByStudentId(studentId: String)
 }

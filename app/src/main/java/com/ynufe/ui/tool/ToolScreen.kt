@@ -1,6 +1,7 @@
 package com.ynufe.ui.tool
 
 import android.annotation.SuppressLint
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -32,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,19 +51,14 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.grade.GradeEntity
 import com.ynufe.data.room.wlan.UserWlanInfoEntity
+import com.ynufe.ui.theme.type.ToolLayout
 import com.ynufe.ui.wlan.UserWlanCard
 import com.ynufe.ui.wlan.WlanActionDialog
 import com.ynufe.ui.wlan.WlanDialogType
 import com.ynufe.ui.wlan.WlanViewModel
 import kotlin.math.absoluteValue
 
-// 与 GradeScreen 保持一致的背景色（2边卡片专用）
 val GradeScreenBackgroundColor = Color(0xFFFDF1F0)
-
-// ── 堆叠布局尺寸常量 ───────────────────────────────────────────────
-private val CARD_HEIGHT  = 140.dp
-private val PEEK_HEIGHT  =  35.dp
-private val STACK_HEIGHT = CARD_HEIGHT + PEEK_HEIGHT * 2  // 210.dp
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -74,6 +72,13 @@ fun ToolScreen(
 ) {
     val grades     by viewModel.randomGrades.collectAsState()
     val activeWlan by viewModel.activeWlanInfo.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        wlanViewModel.errorEvents.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     ToolScreenContent(
         grades                  = grades,
@@ -104,11 +109,10 @@ fun ToolScreenContent(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ── 堆叠卡片区域 ──────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(STACK_HEIGHT + 32.dp),
+                .height(ToolLayout.GradeStackHeight + ToolLayout.GradeStackBoxExtra),
             contentAlignment = Alignment.Center
         ) {
             if (grades.isNotEmpty()) {
@@ -123,7 +127,7 @@ fun ToolScreenContent(
                         text     = "点击卡片查看完整成绩单",
                         style    = MaterialTheme.typography.labelSmall,
                         color    = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = ToolLayout.GradeHintPaddingTop)
                     )
                 }
             } else {
@@ -134,21 +138,18 @@ fun ToolScreenContent(
             }
         }
 
-        // ── 活跃网络账号区域 ──────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            // 标题
             Text(
                 text       = "活跃网络账号",
                 style      = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                modifier   = Modifier.padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 12.dp)
+                modifier   = Modifier.padding(start = ToolLayout.ActiveWlanTitlePaddingStart, end = ToolLayout.ActiveWlanTitlePaddingEnd, bottom = ToolLayout.ActiveWlanTitlePaddingBottom)
             )
 
-            // 卡片 / 空状态提示
             if (activeWlan != null) {
                 UserWlanCard(
                     info          = activeWlan,
@@ -172,7 +173,7 @@ fun ToolScreenContent(
                 Box(
                     modifier         = Modifier
                         .fillMaxWidth()
-                        .padding(top = 40.dp),
+                        .padding(top = ToolLayout.ActiveWlanEmptyPaddingTop),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -186,10 +187,8 @@ fun ToolScreenContent(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // ── 前往 WlanScreen 详情页的导航按钮 ────────────────────
-            //    样式对齐成绩区域的提示行，底部分割线 + 图标 + 文字 + 箭头
             HorizontalDivider(
-                modifier  = Modifier.padding(horizontal = 16.dp),
+                modifier  = Modifier.padding(horizontal = ToolLayout.NavDividerPaddingH),
                 thickness = 0.5.dp,
                 color     = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
             )
@@ -197,15 +196,15 @@ fun ToolScreenContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onNavigateToWlan() }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = ToolLayout.NavRowPaddingH, vertical = ToolLayout.NavRowPaddingV),
                 verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(ToolLayout.NavRowSpacing)
             ) {
                 Icon(
                     imageVector    = Icons.Default.Wifi,
                     contentDescription = null,
                     tint           = MaterialTheme.colorScheme.primary,
-                    modifier       = Modifier.size(18.dp)
+                    modifier       = Modifier.size(ToolLayout.NavIconSize)
                 )
                 Text(
                     text      = "管理全部校园网账号",
@@ -217,7 +216,7 @@ fun ToolScreenContent(
                     imageVector    = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint           = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                    modifier       = Modifier.size(18.dp)
+                    modifier       = Modifier.size(ToolLayout.NavIconSize)
                 )
             }
         }
@@ -241,9 +240,6 @@ fun ToolScreenContent(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GradeStackArea（堆叠轮播，核心逻辑见注释，未改动）
-// ─────────────────────────────────────────────────────────────────────────────
 @SuppressLint("FrequentlyChangingValue")
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -269,9 +265,9 @@ fun GradeStackArea(
         state               = pagerState,
         modifier            = modifier
             .fillMaxWidth()
-            .height(STACK_HEIGHT),
-        pageSize            = PageSize.Fixed(CARD_HEIGHT),
-        contentPadding      = PaddingValues(vertical = PEEK_HEIGHT),
+            .height(ToolLayout.GradeStackHeight),
+        pageSize            = PageSize.Fixed(ToolLayout.GradeCardHeight),
+        contentPadding      = PaddingValues(vertical = ToolLayout.GradePeekHeight),
         horizontalAlignment = Alignment.CenterHorizontally,
         beyondViewportPageCount = 1
     ) { virtualPage ->
@@ -290,14 +286,14 @@ fun GradeStackArea(
 
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .height(CARD_HEIGHT)
+                    .fillMaxWidth(ToolLayout.GradeCardWidthFraction)
+                    .height(ToolLayout.GradeCardHeight)
                     .zIndex(2f - absOffset)
                     .graphicsLayer {
                         scaleX       = scale
                         scaleY       = scale
                         this.alpha   = alpha
-                        translationY = pageOffset * (CARD_HEIGHT - PEEK_HEIGHT).toPx()
+                        translationY = pageOffset * (ToolLayout.GradeCardHeight - ToolLayout.GradePeekHeight).toPx()
                     }
                     .then(
                         if (isCenter) Modifier.clickable { onCardClick() } else Modifier
@@ -315,9 +311,6 @@ fun GradeStackArea(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GradeItemCard（未改动）
-// ─────────────────────────────────────────────────────────────────────────────
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GradeItemCard(
@@ -340,9 +333,9 @@ fun GradeItemCard(
                     ) else Modifier
                 )
                 .fillMaxWidth()
-                .height(CARD_HEIGHT)
-                .padding(horizontal = 8.dp),
-            shape     = RoundedCornerShape(16.dp),
+                .height(ToolLayout.GradeCardHeight)
+                .padding(horizontal = ToolLayout.GradeCardPaddingH),
+            shape     = RoundedCornerShape(ToolLayout.GradeCardCorner),
             border    = BorderStroke(
                 width = 1.dp,
                 color = if (isShared) Color.White.copy(alpha = 0.4f) else Color(0xFFE8E8E8)
@@ -357,7 +350,7 @@ fun GradeItemCard(
         ) {
             Row(
                 modifier              = Modifier
-                    .padding(16.dp)
+                    .padding(ToolLayout.GradeCardContentPadding)
                     .fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically

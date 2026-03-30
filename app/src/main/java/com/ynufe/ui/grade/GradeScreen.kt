@@ -43,7 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.grade.GradeEntity
-import com.ynufe.ui.theme.GradeLayout
+import com.ynufe.ui.theme.type.GradeLayout
 import com.ynufe.utils.GradeUiState
 import kotlin.math.absoluteValue
 

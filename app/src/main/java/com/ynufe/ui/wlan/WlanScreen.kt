@@ -67,50 +67,26 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.wlan.UserWlanInfoEntity
-import com.ynufe.ui.theme.GradeLayout
+import com.ynufe.ui.theme.type.GradeLayout
+import com.ynufe.ui.theme.type.WlanLayout
 import com.ynufe.utils.WlanUiState
 import com.ynufe.utils.toHalfWidth
-
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】Dialog 类型枚举
-//
-//   NONE    → 没有任何 dialog 处于打开状态（默认值）
-//   ADD     → 添加新 Wlan 账号 dialog
-//             触发：右下角工具栏"添加账号"按钮 / Empty 状态"添加账号"按钮
-//   EDIT    → 修改已有 Wlan 账号 dialog（与 ADD 共用同一 Dialog，自动区分模式）
-//             触发：卡片学号行右侧"修改"图标按钮
-//   LOG     → 查看该账号状态日志 dialog
-//             触发：卡片内"日志"文字按钮
-//   DELETE  → 确认删除该账号 dialog
-//             触发：卡片内"移除"文字按钮
-// ─────────────────────────────────────────────────────────────────
 
 enum class WlanDialogType {
     NONE, ADD, EDIT, LOG, DELETE
 }
 
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】入口：从 ViewModel 收集 uiState 并分发
-//
-//  onBack          → 返回上一页（ToolScreen）的回调，默认为空操作
-//                    同时拦截系统返回键（BackHandler）
-//  activeDialog    → 当前打开的是哪个 dialog（WlanDialogType 枚举）
-//  selectedEntity  → 当前操作的完整账号实体
-// ─────────────────────────────────────────────────────────────────
-
 @Composable
 fun WlanScreen(
-    onBack: () -> Unit = {},                          // ← 新增：返回回调
+    onBack: () -> Unit = {},
     viewModel: WlanViewModel = hiltViewModel()
 ) {
-    // 拦截系统返回键，与 GradeScreen 保持一致
     BackHandler { onBack() }
 
     val uiState by viewModel.uiState.collectAsState()
@@ -157,15 +133,13 @@ fun WlanScreen(
             }
         }
 
-        // ── 右下角常驻工具栏（上下排列，带文字标签） ─────────────────────
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(WlanLayout.FabAreaPadding),
+            verticalArrangement = Arrangement.spacedBy(WlanLayout.FabSpacing),
             horizontalAlignment = Alignment.End
         ) {
-            // 按钮 1：添加账号（主色调）
             ExtendedFloatingActionButton(
                 onClick = { activeDialog = WlanDialogType.ADD },
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -174,7 +148,6 @@ fun WlanScreen(
                 text = { Text("添加账号") }
             )
 
-            // 按钮 2：删除所有账号（警告色）
             ExtendedFloatingActionButton(
                 onClick = { viewModel.deleteAllStudent() },
                 containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -185,7 +158,6 @@ fun WlanScreen(
         }
     }
 
-    // Dialog 控制逻辑保持不变
     if (activeDialog != WlanDialogType.NONE) {
         WlanActionDialog(
             type = activeDialog,
@@ -210,13 +182,6 @@ fun WlanScreen(
     }
 }
 
-
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】Success 状态：LazyColumn 多卡片
-//  移除了顶部"添加账号"按钮（已迁移至右下角工具栏）
-//  新增 onEditClick 回调传给每张卡片
-// ─────────────────────────────────────────────────────────────────
-
 @Composable
 fun WlanListContent(
     accounts: List<UserWlanInfoEntity>,
@@ -229,15 +194,13 @@ fun WlanListContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 底部留出空间，避免卡片被右下角 FAB 遮挡
-        contentPadding = PaddingValues(bottom = 88.dp)
+        contentPadding = PaddingValues(bottom = WlanLayout.ListBottomPadding)
     ) {
-        // ── 顶部标题行（已移除"添加账号"按钮）────────────────────────
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = WlanLayout.ListTitlePaddingH, vertical = WlanLayout.ListTitlePaddingV),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -248,7 +211,6 @@ fun WlanListContent(
             }
         }
 
-        // ── 账号卡片列表 ────────────────────────────────────────────
         items(
             items = accounts,
             key = { it.studentId }
@@ -266,22 +228,6 @@ fun WlanListContent(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】统一 Dialog 组件
-//
-//  type 决定渲染哪种内容：
-//    ADD  / EDIT → 共用同一表单（学号 + 密码 + 区域）
-//                  ADD：学号可编辑，密码为空
-//                  EDIT：学号禁用（主键不可改），密码预填
-//    LOG          → 展示 selectedEntity 的状态字段
-//    DELETE       → 删除确认文本
-//
-//  表单校验（对齐 UserScreen 规则）：
-//    - 学号为空 → isError = true，红色边框 + 错误提示
-//    - 密码为空 → isError = true，红色边框 + 错误提示
-//    - 未全部填写完成时保存按钮禁用（enabled = canSave）
-// ─────────────────────────────────────────────────────────────────
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WlanActionDialog(
@@ -292,8 +238,6 @@ fun WlanActionDialog(
     onConfirmEdit: (studentId: String, password: String, location: String) -> Unit,
     onConfirmDelete: () -> Unit,
 ) {
-    // ── ADD/EDIT 共用表单状态 ─────────────────────────────────────
-    // EDIT 模式：预填充学号和区域；密码出于安全原则预填（实体有密码字段则回显）
     var idText by remember(type, selectedEntity) {
         mutableStateOf(if (type == WlanDialogType.EDIT) selectedEntity?.studentId ?: "" else "")
     }
@@ -302,7 +246,6 @@ fun WlanActionDialog(
     }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // 区域选项：显示名 → 内部标识符
     val locationOptions = listOf("宿舍区域" to "@ctc", "教学区域" to "@ynufe")
     var selectedLocationTag by remember(type, selectedEntity) {
         mutableStateOf(
@@ -317,19 +260,16 @@ fun WlanActionDialog(
         )
     }
 
-    // ── 表单校验（与 UserScreen 保持一致：isBlank() 即报错）────────
     val isIdError = idText.isBlank()
     val isPasswordError = passwordText.isBlank()
     val canSave = !isIdError && !isPasswordError
 
     AlertDialog(
         onDismissRequest = onDismiss,
-
-        // ── Dialog 标题（带图标美化）──────────────────────────────
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(WlanLayout.DialogTitleIconToTextSpacing)
             ) {
                 Icon(
                     imageVector = when (type) {
@@ -345,7 +285,7 @@ fun WlanActionDialog(
                         WlanDialogType.LOG    -> MaterialTheme.colorScheme.secondary
                         else                  -> MaterialTheme.colorScheme.primary
                     },
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(WlanLayout.DialogTitleIconSize)
                 )
                 Text(
                     text = when (type) {
@@ -359,37 +299,29 @@ fun WlanActionDialog(
                 )
             }
         },
-
-        // ── Dialog 正文 ───────────────────────────────────────────
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(WlanLayout.DialogFormSpacing)
             ) {
                 when (type) {
-
-                    // ────────────────────────────────────────────────
-                    // 【ADD / EDIT】共用表单
-                    // ────────────────────────────────────────────────
                     WlanDialogType.ADD, WlanDialogType.EDIT -> {
-
-                        // EDIT 模式下的提示信息
                         if (type == WlanDialogType.EDIT) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(WlanLayout.DialogHintCorner),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = WlanLayout.DialogHintPaddingH, vertical = WlanLayout.DialogHintPaddingV),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(WlanLayout.DialogHintIconToTextSpacing)
                                 ) {
                                     Icon(
                                         Icons.Default.Person,
                                         null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(WlanLayout.DialogHintIconSize)
                                     )
                                     Text(
                                         "学号为账号唯一标识，不可修改",
@@ -400,14 +332,13 @@ fun WlanActionDialog(
                             }
                         }
 
-                        // 学号输入框（EDIT 模式下禁用）
                         OutlinedTextField(
                             value = idText,
                             onValueChange = { if (it.all { c -> c.isDigit() }) idText = it },
                             label = { Text("学号") },
                             singleLine = true,
-                            enabled = type == WlanDialogType.ADD, // EDIT 时学号不可改
-                            isError = isIdError && type == WlanDialogType.ADD, // EDIT时学号不为空无需报错
+                            enabled = type == WlanDialogType.ADD,
+                            isError = isIdError && type == WlanDialogType.ADD,
                             supportingText = {
                                 if (isIdError && type == WlanDialogType.ADD) {
                                     Text("学号不能为空")
@@ -417,7 +348,7 @@ fun WlanActionDialog(
                                 Icon(
                                     Icons.Default.School,
                                     null,
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier.size(WlanLayout.DialogFieldIconSize),
                                     tint = if (isIdError && type == WlanDialogType.ADD)
                                         MaterialTheme.colorScheme.error
                                     else
@@ -427,7 +358,6 @@ fun WlanActionDialog(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // 密码输入框（含显示/隐藏切换）
                         OutlinedTextField(
                             value = passwordText,
                             onValueChange = { passwordText = it.toHalfWidth() },
@@ -445,7 +375,7 @@ fun WlanActionDialog(
                                 Icon(
                                     Icons.Default.Lock,
                                     null,
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier.size(WlanLayout.DialogFieldIconSize),
                                     tint = if (isPasswordError)
                                         MaterialTheme.colorScheme.error
                                     else
@@ -466,18 +396,17 @@ fun WlanActionDialog(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // 区域单选
                         Column {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(WlanLayout.DialogLocationLabelSpacing),
                                 modifier = Modifier.padding(bottom = 4.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Place,
                                     null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(WlanLayout.DialogLocationLabelIconSize)
                                 )
                                 Text(
                                     text = "选择登录区域",
@@ -487,7 +416,7 @@ fun WlanActionDialog(
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(WlanLayout.DialogLocationOptionSpacing)
                             ) {
                                 locationOptions.forEach { (displayName, tag) ->
                                     Row(
@@ -511,9 +440,6 @@ fun WlanActionDialog(
                         }
                     }
 
-                    // ────────────────────────────────────────────────
-                    // 【LOG dialog】账号状态字段展示（内容不变）
-                    // ────────────────────────────────────────────────
                     WlanDialogType.LOG -> {
                         if (selectedEntity == null) {
                             Text("无数据", style = MaterialTheme.typography.bodyMedium)
@@ -546,7 +472,7 @@ fun WlanActionDialog(
                             )
 
                             HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 12.dp),
+                                modifier = Modifier.padding(vertical = WlanLayout.DialogLogDividerPaddingV),
                                 thickness = 0.5.dp,
                                 color = MaterialTheme.colorScheme.outlineVariant
                             )
@@ -576,9 +502,6 @@ fun WlanActionDialog(
                         }
                     }
 
-                    // ────────────────────────────────────────────────
-                    // 【DELETE dialog】删除确认
-                    // ────────────────────────────────────────────────
                     WlanDialogType.DELETE -> {
                         Text(
                             text = "确定要删除学号为 ${selectedEntity?.studentId ?: "—"} 的账号吗？\n此操作不可撤销。",
@@ -590,8 +513,6 @@ fun WlanActionDialog(
                 }
             }
         },
-
-        // ── 确认 / 取消按钮 ───────────────────────────────────────
         confirmButton = {
             when (type) {
                 WlanDialogType.ADD, WlanDialogType.EDIT -> {
@@ -624,10 +545,6 @@ fun WlanActionDialog(
     )
 }
 
-// ─────────────────────────────────────────────────────────────────
-// WlanLogRow（辅助组件，未改动）
-// ─────────────────────────────────────────────────────────────────
-
 @Composable
 fun WlanLogRow(
     icon: ImageVector,
@@ -637,14 +554,14 @@ fun WlanLogRow(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(WlanLayout.LogRowCorner)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = WlanLayout.LogRowPaddingH, vertical = WlanLayout.LogRowPaddingV),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(WlanLayout.LogRowIconToContentSpacing)
         ) {
-            Icon(icon, null, tint = iconTint, modifier = Modifier.size(16.dp))
+            Icon(icon, null, tint = iconTint, modifier = Modifier.size(WlanLayout.LogRowIconSize))
             Column {
                 Text(
                     label,
@@ -657,24 +574,20 @@ fun WlanLogRow(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】Loading 状态：骨架屏（3 张占位卡片）
-// ─────────────────────────────────────────────────────────────────
-
 @Composable
 fun WlanSkeletonContent() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(WlanLayout.SkeletonPadding),
+        verticalArrangement = Arrangement.spacedBy(WlanLayout.SkeletonCardSpacing)
     ) {
         repeat(3) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .height(WlanLayout.SkeletonCardHeight),
+                shape = RoundedCornerShape(WlanLayout.SkeletonCardCorner),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                 )
@@ -683,21 +596,17 @@ fun WlanSkeletonContent() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】Empty 状态：暂无账号 + 添加按钮
-// ─────────────────────────────────────────────────────────────────
-
 @Composable
 fun WlanEmptyContent(onAddClick: () -> Unit = {}) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(WlanLayout.EmptyContentSpacing)
         ) {
             Icon(
                 Icons.Default.WifiOff,
                 null,
-                modifier = Modifier.size(64.dp),
+                modifier = Modifier.size(WlanLayout.EmptyIconSize),
                 tint = Color.LightGray
             )
             Text(
@@ -707,16 +616,16 @@ fun WlanEmptyContent(onAddClick: () -> Unit = {}) {
             )
             Surface(
                 onClick = onAddClick,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(WlanLayout.EmptyButtonCorner),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    modifier = Modifier.padding(horizontal = WlanLayout.EmptyButtonPaddingH, vertical = WlanLayout.EmptyButtonPaddingV),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(WlanLayout.EmptyButtonIconSize))
                     Text("添加账号", style = MaterialTheme.typography.labelLarge)
                 }
             }
@@ -724,21 +633,17 @@ fun WlanEmptyContent(onAddClick: () -> Unit = {}) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】Error 状态：加载失败提示
-// ─────────────────────────────────────────────────────────────────
-
 @Composable
 fun WlanErrorContent(message: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(WlanLayout.ErrorContentSpacing)
         ) {
             Icon(
                 Icons.Default.ErrorOutline,
                 null,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(WlanLayout.ErrorIconSize),
                 tint = MaterialTheme.colorScheme.error
             )
             Text(
@@ -755,13 +660,6 @@ fun WlanErrorContent(message: String) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// 【Wlan】账号卡片组件
-//
-//  学号 Header 行右侧新增"修改"图标按钮（TooltipBox 提示文字）
-//  onEditClick → 触发 WlanDialogType.EDIT
-// ─────────────────────────────────────────────────────────────────
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserWlanCard(
@@ -777,32 +675,30 @@ fun UserWlanCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = WlanLayout.CardPaddingH, vertical = WlanLayout.CardPaddingV)
             .clickable {
                 if (!info.isActive) onSetPrimaryClick()
             },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(WlanLayout.CardCorner),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = GradeLayout.CardElevation)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-
-            // ── 顶部 Header ──────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    .padding(start = WlanLayout.CardHeaderPaddingStart, end = WlanLayout.CardHeaderPaddingEnd, top = WlanLayout.CardHeaderPaddingV, bottom = WlanLayout.CardHeaderPaddingV),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     Icons.Default.CellTower,
                     null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(WlanLayout.CardHeaderIconSize)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(WlanLayout.CardHeaderIconToIdSpacing))
 
                 Text(
                     info.studentId,
@@ -810,16 +706,15 @@ fun UserWlanCard(
                     fontWeight = FontWeight.Bold
                 )
 
-                // ── 激活状态：方形背景标签 ──
                 if (info.isActive) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(4.dp)
+                        shape = RoundedCornerShape(WlanLayout.ActiveLabelCorner)
                     ) {
                         Text(
                             text = "主要",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = WlanLayout.ActiveLabelPaddingH, vertical = WlanLayout.ActiveLabelPaddingV),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimary,
                             fontWeight = FontWeight.Bold
@@ -829,18 +724,17 @@ fun UserWlanCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // ── 修改按钮：保留图标 + 文字描述 ──
                 TextButton(
                     onClick = onEditClick,
-                    contentPadding = PaddingValues(horizontal = 8.dp)
+                    contentPadding = PaddingValues(horizontal = WlanLayout.EditButtonPaddingH)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.Edit,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(WlanLayout.EditButtonIconSize)
                         )
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(WlanLayout.EditButtonIconToTextSpacing))
                         Text(
                             text = "点击修改",
                             style = MaterialTheme.typography.labelLarge
@@ -849,24 +743,21 @@ fun UserWlanCard(
                 }
             }
 
-            // ── 分割线 ──
             HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = WlanLayout.CardDividerPaddingH),
                 thickness = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
             )
 
-            // ── 下方内容区 ────────────────────────────────────────
             Row(
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(WlanLayout.CardContentPadding)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 左侧信息与引导
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(WlanLayout.DetailRowSpacing)
                 ) {
                     WlanDetailRow(Icons.Default.Place, "区域", formatLocation(info.location))
                     WlanDetailRow(Icons.Default.Language, "IP 地址", info.ip)
@@ -874,14 +765,13 @@ fun UserWlanCard(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // 功能按钮：日志 & 移除
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(WlanLayout.ActionButtonRowSpacing)) {
                         Row(
                             modifier = Modifier.clickable { onLogClick() },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.NetworkCheck, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.NetworkCheck, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(WlanLayout.ActionButtonIconSize))
+                            Spacer(modifier = Modifier.width(WlanLayout.ActionButtonIconToTextSpacing))
                             Text("日志", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         }
 
@@ -889,13 +779,12 @@ fun UserWlanCard(
                             modifier = Modifier.clickable { onDeleteClick() },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(WlanLayout.ActionButtonIconSize))
+                            Spacer(modifier = Modifier.width(WlanLayout.ActionButtonIconToTextSpacing))
                             Text("移除", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
                         }
                     }
 
-                    // ── 底部提醒文字 ──
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "提示：点击卡片区域可将该账号设为主要",
@@ -904,17 +793,16 @@ fun UserWlanCard(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(WlanLayout.ContentSectionSpacing))
 
-                // 右侧登录/注销大按钮
                 Column(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
                         onClick = onLoginClick,
-                        modifier = Modifier.width(85.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.width(WlanLayout.LoginButtonWidth),
+                        shape = RoundedCornerShape(WlanLayout.LoginButtonCorner),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00D100)),
                         contentPadding = PaddingValues(0.dp)
                     ) {
@@ -923,8 +811,8 @@ fun UserWlanCard(
 
                     Button(
                         onClick = onLogoutClick,
-                        modifier = Modifier.width(85.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.width(WlanLayout.LoginButtonWidth),
+                        shape = RoundedCornerShape(WlanLayout.LoginButtonCorner),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         contentPadding = PaddingValues(0.dp)
                     ) {
@@ -943,9 +831,9 @@ private fun WlanDetailRow(icon: ImageVector, label: String, value: String) {
             icon,
             null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(WlanLayout.DetailRowIconSize)
         )
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(WlanLayout.DetailRowIconToLabelSpacing))
         Text(
             "$label: ",
             style = MaterialTheme.typography.bodySmall,

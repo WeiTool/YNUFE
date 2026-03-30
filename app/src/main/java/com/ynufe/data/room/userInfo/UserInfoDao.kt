@@ -19,8 +19,4 @@ interface UserInfoDao {
      */
     @Query("SELECT * FROM user_info WHERE studentId = :studentId LIMIT 1")
     fun getUserInfoByStudentId(studentId: String): Flow<UserInfoEntity?>
-
-    /** 保留原有无参查询，供其他场景使用 */
-    @Query("SELECT * FROM user_info LIMIT 1")
-    fun getUserInfoFlow(): Flow<UserInfoEntity?>
 }

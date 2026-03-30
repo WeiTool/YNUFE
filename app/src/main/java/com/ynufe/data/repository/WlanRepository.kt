@@ -162,6 +162,7 @@ class WlanRepository @Inject constructor(
                             }
 
                             if (infoBody != null) {
+                                val currentIsActive = wlanUserDao.getIsActiveById(studentId)
                                 val entity = UserWlanInfoEntity(
                                     studentId = studentId,
                                     password = encryptedPasswordFromDb,
@@ -172,7 +173,8 @@ class WlanRepository @Inject constructor(
                                     errorMsg = loginBody.errorMsg ?: "",
                                     ployMsg = loginBody.ployMsg ?: "",
                                     sucMsg = loginBody.sucMsg,
-                                    log = ""
+                                    log = "",
+                                    isActive = currentIsActive
                                 )
                                 wlanUserDao.insertUserInfo(entity)
 

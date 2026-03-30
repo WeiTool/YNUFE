@@ -1,4 +1,4 @@
-package com.ynufe.ui.theme
+package com.ynufe.ui.theme.type
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalDensity

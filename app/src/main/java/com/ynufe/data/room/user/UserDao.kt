@@ -27,11 +27,11 @@ interface UserDao {
     @Query("UPDATE user SET startTime = :time WHERE studentId = :id")
     suspend fun updateUserStartTime(id: String, time: Long)
 
+    // 激活指定用户
+    @Query("UPDATE user SET isActive = 1 WHERE studentId = :studentId")
+    suspend fun setActivateUser(studentId: String)
+
     // 将所有用户设为非激活
     @Query("UPDATE user SET isActive = 0")
     suspend fun deactivateAllUsers()
-
-    // 激活指定用户
-    @Query("UPDATE user SET isActive = 1 WHERE studentId = :studentId")
-    suspend fun activateUser(studentId: String)
 }

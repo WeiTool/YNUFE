@@ -59,7 +59,7 @@ class UserRepository @Inject constructor(
 
     suspend fun deactivateAllUsers() = userDao.deactivateAllUsers() // 将所有用户设为非激活
 
-    suspend fun activateUser(studentId: String) = userDao.activateUser(studentId) // 激活指定用户
+    suspend fun setActivateUser(studentId: String) = userDao.setActivateUser(studentId) // 激活指定用户
 
     suspend fun updateUserStartTime(id: String, time: Long) = userDao.updateUserStartTime(id, time) // 更新用户上课时间
 

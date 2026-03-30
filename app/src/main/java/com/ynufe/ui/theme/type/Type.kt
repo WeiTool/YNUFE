@@ -1,4 +1,4 @@
-package com.ynufe.ui.theme
+package com.ynufe.ui.theme.type
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

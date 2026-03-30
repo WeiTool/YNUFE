@@ -30,6 +30,10 @@ interface UserWlanInfoDao {
     @Query("UPDATE user_wlan_info SET isActive = 1 WHERE studentId = :studentId")
     suspend fun activateUser(studentId: String)
 
+    // 根据学号获取isActive
+    @Query("SELECT isActive FROM user_wlan_info WHERE studentId = :studentId")
+    suspend fun getIsActiveById(studentId: String): Boolean
+
     // 根据学号删除该账号记录
     @Query("DELETE FROM user_wlan_info WHERE studentId = :studentId")
     suspend fun deleteByStudentId(studentId: String)

@@ -36,7 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.ui.CheckVersionViewModel
-import com.ynufe.ui.theme.InfoLayout
+import com.ynufe.ui.theme.type.InfoLayout
 
 @Composable
 fun InfoScreen(
