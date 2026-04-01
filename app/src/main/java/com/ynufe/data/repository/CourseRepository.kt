@@ -31,6 +31,6 @@ class CourseRepository @Inject constructor(
 
     //  提供给viewmodel
 
-    fun getCoursesByStudentId(studentId: String) = courseDao.getCoursesByStudentId(studentId) // 获取学生课表
+    fun getCoursesByStudentId(studentId: String) = courseDao.getCoursesByStudentId(studentId) // 获取学生课表列表
     suspend fun deleteCoursesByStudentId(studentId: String) = courseDao.deleteCoursesByStudentId(studentId) // 删除指定学生课表
 }

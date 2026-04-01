@@ -54,7 +54,7 @@ import com.ynufe.data.room.wlan.UserWlanInfoEntity
 import com.ynufe.ui.theme.type.ToolLayout
 import com.ynufe.ui.wlan.UserWlanCard
 import com.ynufe.ui.wlan.WlanActionDialog
-import com.ynufe.ui.wlan.WlanDialogType
+import com.ynufe.ui.wlan.WlanDialogState
 import com.ynufe.ui.wlan.WlanViewModel
 import kotlin.math.absoluteValue
 
@@ -102,15 +102,15 @@ fun ToolScreenContent(
     onNavigateToGrade: () -> Unit,
     onNavigateToWlan: () -> Unit
 ) {
-    var activeDialog   by remember { mutableStateOf(WlanDialogType.NONE) }
-    var selectedEntity by remember { mutableStateOf<UserWlanInfoEntity?>(null) }
+    // 单一状态变量替代原来的 activeDialog + selectedEntity 两个分散变量
+    var dialogState by remember { mutableStateOf<WlanDialogState>(WlanDialogState.None) }
 
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier            = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            modifier = Modifier
+            modifier         = Modifier
                 .fillMaxWidth()
                 .height(ToolLayout.GradeStackHeight + ToolLayout.GradeStackBoxExtra),
             contentAlignment = Alignment.Center
@@ -147,7 +147,11 @@ fun ToolScreenContent(
                 text       = "活跃网络账号",
                 style      = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                modifier   = Modifier.padding(start = ToolLayout.ActiveWlanTitlePaddingStart, end = ToolLayout.ActiveWlanTitlePaddingEnd, bottom = ToolLayout.ActiveWlanTitlePaddingBottom)
+                modifier   = Modifier.padding(
+                    start  = ToolLayout.ActiveWlanTitlePaddingStart,
+                    end    = ToolLayout.ActiveWlanTitlePaddingEnd,
+                    bottom = ToolLayout.ActiveWlanTitlePaddingBottom
+                )
             )
 
             if (activeWlan != null) {
@@ -155,19 +159,12 @@ fun ToolScreenContent(
                     info          = activeWlan,
                     onLoginClick  = { wlanViewModel.loginWlan(activeWlan) },
                     onLogoutClick = { wlanViewModel.logoutWlan(activeWlan) },
-                    onLogClick    = {
-                        selectedEntity = activeWlan
-                        activeDialog   = WlanDialogType.LOG
-                    },
+                    onLogClick    = { dialogState = WlanDialogState.Log(activeWlan) },
                     onEditClick   = {
                         val plainPassword = wlanViewModel.decryptPassword(activeWlan.password)
-                        selectedEntity    = activeWlan.copy(password = plainPassword)
-                        activeDialog      = WlanDialogType.EDIT
+                        dialogState = WlanDialogState.Edit(activeWlan.copy(password = plainPassword))
                     },
-                    onDeleteClick = {
-                        selectedEntity = activeWlan
-                        activeDialog   = WlanDialogType.DELETE
-                    }
+                    onDeleteClick = { dialogState = WlanDialogState.Delete(activeWlan) }
                 )
             } else {
                 Box(
@@ -188,12 +185,11 @@ fun ToolScreenContent(
             Spacer(modifier = Modifier.weight(1f))
 
             HorizontalDivider(
-                modifier  = Modifier.padding(horizontal = ToolLayout.NavDividerPaddingH),
-                thickness = 0.5.dp,
-                color     = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                modifier  = Modifier.padding(horizontal = ToolLayout.NavRowPaddingH),
+                thickness = 0.5.dp
             )
             Row(
-                modifier = Modifier
+                modifier              = Modifier
                     .fillMaxWidth()
                     .clickable { onNavigateToWlan() }
                     .padding(horizontal = ToolLayout.NavRowPaddingH, vertical = ToolLayout.NavRowPaddingV),
@@ -201,40 +197,44 @@ fun ToolScreenContent(
                 horizontalArrangement = Arrangement.spacedBy(ToolLayout.NavRowSpacing)
             ) {
                 Icon(
-                    imageVector    = Icons.Default.Wifi,
+                    imageVector        = Icons.Default.Wifi,
                     contentDescription = null,
-                    tint           = MaterialTheme.colorScheme.primary,
-                    modifier       = Modifier.size(ToolLayout.NavIconSize)
+                    tint               = MaterialTheme.colorScheme.primary,
+                    modifier           = Modifier.size(ToolLayout.NavIconSize)
                 )
                 Text(
-                    text      = "管理全部校园网账号",
-                    style     = MaterialTheme.typography.bodyMedium,
-                    color     = MaterialTheme.colorScheme.primary,
-                    modifier  = Modifier.weight(1f)
+                    text     = "管理全部校园网账号",
+                    style    = MaterialTheme.typography.bodyMedium,
+                    color    = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
                 )
                 Icon(
-                    imageVector    = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    imageVector        = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint           = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                    modifier       = Modifier.size(ToolLayout.NavIconSize)
+                    tint               = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    modifier           = Modifier.size(ToolLayout.NavIconSize)
                 )
             }
         }
     }
 
-    if (activeDialog != WlanDialogType.NONE) {
+    if (dialogState != WlanDialogState.None) {
         WlanActionDialog(
-            type           = activeDialog,
-            selectedEntity = selectedEntity,
-            onDismiss      = {
-                activeDialog   = WlanDialogType.NONE
-                selectedEntity = null
+            state         = dialogState,
+            onDismiss     = { dialogState = WlanDialogState.None },
+            onConfirmAdd  = { id, pw, loc ->
+                wlanViewModel.addAccount(id, pw, loc)
+                dialogState = WlanDialogState.None
             },
-            onConfirmAdd    = { id, pw, loc -> wlanViewModel.addAccount(id, pw, loc) },
-            onConfirmEdit   = { id, pw, loc -> wlanViewModel.updateAccount(id, pw, loc) },
+            onConfirmEdit = { id, pw, loc ->
+                wlanViewModel.updateAccount(id, pw, loc)
+                dialogState = WlanDialogState.None
+            },
             onConfirmDelete = {
-                selectedEntity?.let { wlanViewModel.deleteAccount(it.studentId) }
-                activeDialog = WlanDialogType.NONE
+                (dialogState as? WlanDialogState.Delete)?.let {
+                    wlanViewModel.deleteAccount(it.entity.studentId)
+                }
+                dialogState = WlanDialogState.None
             }
         )
     }

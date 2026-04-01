@@ -9,7 +9,7 @@ import com.ynufe.data.room.wlan.UserWlanInfoEntity
 import com.ynufe.utils.CryptoManager
 import com.ynufe.utils.LoginResult
 import com.ynufe.utils.wlan.Base64
-import com.ynufe.utils.wlan.TEA
+import com.ynufe.utils.wlan.XXTEA
 import com.ynufe.utils.wlan.hmacMd5
 import com.ynufe.utils.wlan.sha1
 import kotlinx.coroutines.delay
@@ -23,7 +23,7 @@ class WlanRepository @Inject constructor(
     private val wlanUserDao: UserWlanInfoDao,
     private val cryptoManager: CryptoManager,
     private val gson: Gson,
-    private val tea: TEA
+    private val XXTEA: XXTEA
 ) {
     private val acid = 7
     private val n = 200
@@ -63,6 +63,8 @@ class WlanRepository @Inject constructor(
     }
 
     suspend fun getToken(username: String, time: String): LoginResult {
+        val studentId = username.takeWhile { it.isDigit() }
+
         return try {
             val response = wlanApi.getToken(username, time)
 
@@ -71,13 +73,27 @@ class WlanRepository @Inject constructor(
                 if (tokenData != null && tokenData.challenge.isNotEmpty()) {
                     LoginResult.Success(tokenData)
                 } else {
-                    LoginResult.Error("Token 字段解析为空或格式错误")
+                    LoginResult.Error("Token 字段解析为空")
                 }
             } else {
                 LoginResult.Error("HTTP错误: ${response.code()}")
             }
         } catch (e: Exception) {
-            LoginResult.Error("连接异常: ${e.localizedMessage}")
+            val originalMsg = e.localizedMessage ?: ""
+
+            val isConnectionError = originalMsg.contains("172.16.130.31") ||
+                    originalMsg.contains("failed to connect") ||
+                    originalMsg.contains("Timeout")
+
+            val friendlyMsg = if (isConnectionError) "未连接校园网 WiFi" else originalMsg
+
+            val logTag = if (isConnectionError) "[网络环境错误]" else "[连接异常]"
+
+            recordErrorLog(studentId, "$logTag $friendlyMsg (原始信息: $originalMsg)")
+
+            wlanUserDao.updateLogoutStatus(studentId, "error", friendlyMsg)
+
+            LoginResult.Error(friendlyMsg)
         }
     }
 
@@ -125,7 +141,7 @@ class WlanRepository @Inject constructor(
                 "acid" to acid,
                 "enc_ver" to enc
             )
-            val info = "{SRBX1}" + Base64.encode(tea.encode(gson.toJson(infoMap), token))
+            val info = "{SRBX1}" + Base64.encode(XXTEA.encode(gson.toJson(infoMap), token))
             val checksum = buildString {
                 append(token).append(usernameWithTag).append(token).append(hmd5)
                 append(token).append(acid).append(token).append(onlineIp)
@@ -154,7 +170,8 @@ class WlanRepository @Inject constructor(
                             // 尝试 3 次同步，每次间隔 1 秒，解决服务器更新不及时的问题
                             repeat(3) { attempt ->
                                 delay(1000L * (attempt + 1))
-                                val infoResponse = wlanApi.wlanUserInfo(System.currentTimeMillis().toString())
+                                val infoResponse =
+                                    wlanApi.wlanUserInfo(System.currentTimeMillis().toString())
                                 if (infoResponse.isSuccessful && infoResponse.body() != null) {
                                     infoBody = infoResponse.body()
                                     return@repeat // 成功取到数据，跳出循环
@@ -190,6 +207,7 @@ class WlanRepository @Inject constructor(
                                 LoginResult.Error(errMsg)
                             }
                         }
+
                         else -> {
                             val errMsg = loginBody.errorMsg ?: "登录失败"
                             recordErrorLog(studentId, errMsg)
@@ -266,4 +284,7 @@ class WlanRepository @Inject constructor(
 
     fun decryptPassword(encrypted: String): String = cryptoManager.decrypt(encrypted) // 解密
     fun encryptPassword(password: String): String = cryptoManager.encrypt(password) // 加密
+
+    suspend fun updateAccountInfo(studentId: String, password: String, location: String) =
+        wlanUserDao.updateAccountInfo(studentId, password, location)  // 更新账号密码区域
 }

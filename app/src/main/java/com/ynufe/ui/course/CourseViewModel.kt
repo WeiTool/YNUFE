@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ynufe.data.repository.CourseRepository
 import com.ynufe.data.repository.UserRepository
-import com.ynufe.data.room.course.CourseDao
 import com.ynufe.utils.CourseUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,21 +32,25 @@ class CourseViewModel @Inject constructor(
     private val userRepository: UserRepository
 ) : ViewModel() {
 
-    // ── 校区时间表（纯 UI 状态，无需持久化）──────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // 校区时间表：纯 UI 本地状态，无需持久化
+    //   安宁校区 / 龙泉校区各有独立的节次时间段定义，
+    //   toggleSchedule() 切换后由 Compose 自动重组时间轴组件
+    // ─────────────────────────────────────────────────────────────────
 
-    private val scheduleAnning = listOf(
+    private val scheduleLongquan = listOf(
         "08:00" to "08:40", "08:50" to "09:30", "10:00" to "10:40", "10:50" to "11:30",
         "11:40" to "12:20", "14:30" to "15:10", "15:20" to "16:00", "16:30" to "17:10",
         "17:20" to "18:00", "19:00" to "19:40", "19:50" to "20:30", "20:50" to "21:20", "21:30" to "22:20"
     ).mapIndexed { index, pair -> TimeSlot(index + 1, pair.first, pair.second) }
 
-    private val scheduleLongquan = listOf(
+    private val scheduleAnning = listOf(
         "08:20" to "09:00", "09:10" to "09:50", "10:10" to "10:50", "11:00" to "11:40",
         "11:50" to "12:30", "14:00" to "14:40", "14:50" to "15:30", "15:40" to "16:20",
         "16:40" to "17:20", "17:30" to "18:10", "19:00" to "19:40", "19:50" to "20:30", "20:40" to "21:20"
     ).mapIndexed { index, pair -> TimeSlot(index + 1, pair.first, pair.second) }
 
-    var currentTimeSlots by mutableStateOf(scheduleLongquan)
+    var currentTimeSlots by mutableStateOf(scheduleAnning)
         private set
 
     var currentScheduleName by mutableStateOf("安宁校区")
@@ -55,39 +58,41 @@ class CourseViewModel @Inject constructor(
 
     fun toggleSchedule(isAnning: Boolean) {
         if (isAnning) {
-            currentTimeSlots = scheduleLongquan
+            currentTimeSlots = scheduleAnning
             currentScheduleName = "安宁校区"
         } else {
-            currentTimeSlots = scheduleAnning
+            currentTimeSlots = scheduleLongquan
             currentScheduleName = "龙泉校区"
         }
     }
 
-    // ── 学期上课日期（写入 DB，由 uiState 中的 semesterStartMs 观察）
+    // ─────────────────────────────────────────────────────────────────
+    // 学期起始日期：写入数据库，由 uiState 中的 classBeginTime 响应变更
+    //   先查当前激活用户再更新，避免无账号时写入无效数据
+    // ─────────────────────────────────────────────────────────────────
 
-    fun updateSemesterStart(newStartTime: Long) {
+    fun updateClassBeginTime(newStartTime: Long) {
         viewModelScope.launch {
             val user = userRepository.getIsActiveUser.firstOrNull()
             user?.let { userRepository.updateUserStartTime(it.studentId, newStartTime) }
         }
     }
 
-    // ── 统一 UI 状态 ──────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // 主 UI 状态：与激活用户及其课表数据联动
+    //   Loading → 等待数据库首次返回，显示骨架屏
+    //   NoUser  → 未绑定任何账号，显示引导空状态
+    //   Empty   → 已绑定账号但尚未同步课表，携带学期起始时间
+    //   Success → 课表加载成功，正常渲染，携带课程列表及学期起始时间
+    //
+    //   使用 Eagerly 而非 WhileSubscribed：
+    //   - WhileSubscribed 下切 Tab → 订阅者归零 → 5s 后上游停止
+    //     → 回到 Tab 时上游重启 → StateFlow 先回到 initialValue(Loading)
+    //     → 骨架屏重新闪烁
+    //   - Eagerly 下上游在 ViewModel 创建时立刻启动且永不停止，
+    //     StateFlow 始终持有最新值，切回 Tab 立即恢复 Success，无闪烁
+    // ─────────────────────────────────────────────────────────────────
 
-    /**
-     * 驱动整个课程页面显示的单一状态流：
-     * - [CourseUiState.Loading] → 等待数据库首次返回，显示骨架屏
-     * - [CourseUiState.NoUser]  → 未绑定任何账号，显示引导空状态
-     * - [CourseUiState.Empty]   → 已绑定账号但尚未同步课表
-     * - [CourseUiState.Success] → 课表加载成功，正常渲染
-     *
-     * 使用 Eagerly 而非 WhileSubscribed：
-     * - WhileSubscribed 下切 Tab → 订阅者归零 → 5s 后上游停止
-     *   → 回到 Tab 时上游重启 → StateFlow 先回到 initialValue(Loading)
-     *   → 骨架屏重新闪烁
-     * - Eagerly 下上游在 ViewModel 创建时立刻启动且永不停止，
-     *   StateFlow 始终持有最新值，切回 Tab 立即恢复 Success，无闪烁。
-     */
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<CourseUiState> = userRepository.getIsActiveUser
         .flatMapLatest { user ->

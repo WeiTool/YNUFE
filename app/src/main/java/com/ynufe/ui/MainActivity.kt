@@ -159,7 +159,7 @@ fun YNUFEApp(viewModel: CheckVersionViewModel) {
                                 onNavigateToGrade = {
                                     currentDestination = AppDestinations.GRADE_DETAIL
                                 },
-                                onNavigateToWlan = {          // ← 新增
+                                onNavigateToWlan = {
                                     currentDestination = AppDestinations.WLAN_DETAIL
                                 }
                             )

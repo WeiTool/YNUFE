@@ -67,7 +67,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ynufe.data.room.course.CourseEntity
@@ -116,7 +115,7 @@ fun CourseScreen(viewModel: CourseViewModel = hiltViewModel()) {
         currentScheduleName = viewModel.currentScheduleName,
         onToggleSchedule = { isAnning -> viewModel.toggleSchedule(isAnning) },
         classBeginTime = classBeginTime,
-        onClassBeginTimeChange = { newTime -> viewModel.updateSemesterStart(newTime) }
+        onClassBeginTimeChange = { newTime -> viewModel.updateClassBeginTime(newTime) }
     ) {
         when (val state = uiState) {
             is CourseUiState.Loading -> CourseLoadingContent(
@@ -871,36 +870,4 @@ fun CoursePreviewWrapper(widthDp: Int) {
             )
         }
     }
-}
-
-// ─────────────────────────────────────────────
-// 各种屏幕档位预览
-// ─────────────────────────────────────────────
-
-@Preview(name = "宽屏 - 手机横屏/平板", widthDp = 800, heightDp = 480, showBackground = true)
-@Composable
-fun PreviewWide() { CoursePreviewWrapper(800) }
-
-@Preview(name = "中屏 - 标准现代手机", widthDp = 411, heightDp = 891, showBackground = true)
-@Composable
-fun PreviewMedium() { CoursePreviewWrapper(411) }
-
-@Preview(name = "窄屏 - 小型设备", widthDp = 320, heightDp = 640, showBackground = true)
-@Composable
-fun PreviewNarrow() { CoursePreviewWrapper(320) }
-
-@Preview(name = "极窄屏 - 折叠屏外屏", widthDp = 240, heightDp = 640, showBackground = true)
-@Composable
-fun PreviewUltraNarrow() { CoursePreviewWrapper(240) }
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewLoading() {
-    MaterialTheme { CourseLoadingContent(onMenuClick = {}) }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewNoUser() {
-    MaterialTheme { CourseNoUserContent(onMenuClick = {}) }
 }

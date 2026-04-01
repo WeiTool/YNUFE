@@ -38,11 +38,18 @@ class UserViewModel @Inject constructor(
     private val userDao: UserDao
 ) : ViewModel() {
 
-    // ── 对话框专用：验证码图片 ──────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // 对话框辅助状态：验证码图片（登录弹窗专用，不归入主 uiState）
+    // ─────────────────────────────────────────────────────────────────
+
     private val _verifyCodeImage = mutableStateOf<ByteArray?>(null)
     val verifyCodeImage: State<ByteArray?> = _verifyCodeImage
 
-    // ── 对话框专用：所有已保存账号列表 ───────────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // 账号列表：供账号切换弹窗使用
+    //   Eagerly 保证 ViewModel 创建后立刻开始收集，弹窗打开时无需等待
+    // ─────────────────────────────────────────────────────────────────
+
     val allUsers: StateFlow<List<UserEntity>> = userRepository.getAllUsers
         .stateIn(
             scope = viewModelScope,
@@ -50,23 +57,31 @@ class UserViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    // ── 同步操作错误信息（null 表示无错误）──────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // 错误 / 加载状态：同步操作（同步课表 / 成绩 / 切换账号）的反馈
+    //   _syncError   → null 表示无错误，非 null 则显示错误提示
+    //   _isOperationLoading → 控制全屏 Loading 遮罩
+    // ─────────────────────────────────────────────────────────────────
+
     private val _syncError = MutableStateFlow<String?>(null)
     val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
-    // ── 内部状态（不对外暴露）────────────────────────────────
-
-    /** 操作加载（同步课表 / 成绩 / 切换账号）标志 */
     private val _isOperationLoading = MutableStateFlow(false)
 
-    /**
-     * 数据库首次查询状态。
-     * 使用 Pair<Boolean, UserEntity?> 区分「尚未返回 (false, null)」
-     * 与「已返回但无账号 (true, null)」，避免切换 Tab 时出现闪屏。
-     *
-     * Eagerly：上游永不停止，StateFlow 始终持有最新值，
-     * 切回 Tab 时 collectAsState() 立刻获得当前状态，不会重置回 Pair(false, null)。
-     */
+    // ─────────────────────────────────────────────────────────────────
+    // 内部数据流（不对外暴露，仅用于组合成 uiState）
+    //
+    //   _dbState  → Pair<已就绪, 当前激活用户>
+    //               区分「尚未返回 (false, null)」与「已返回但无账号 (true, null)」，
+    //               避免切换 Tab 时出现骨架屏闪烁
+    //
+    //   _userInfo → 通过 flatMapLatest 与激活用户联动，
+    //               用户切换时自动切换到对应的 userInfo 数据流
+    //
+    //   两者均使用 Eagerly：上游永不停止，StateFlow 始终持有最新值，
+    //   切回 Tab 时 collectAsState() 立刻获得当前状态，不会重置回初始值
+    // ─────────────────────────────────────────────────────────────────
+
     private val _dbState = userRepository.getIsActiveUser
         .map { Pair(true, it) }
         .stateIn(
@@ -75,10 +90,6 @@ class UserViewModel @Inject constructor(
             initialValue = Pair(false, null)
         )
 
-    /**
-     * 用 flatMapLatest 把「当前激活用户」与「该用户的 userInfo」串联。
-     * Eagerly 保证切 Tab 后不会因上游停止而在回来时重新发出 null。
-     */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val _userInfo = userRepository.getIsActiveUser
         .flatMapLatest { user ->
@@ -91,17 +102,16 @@ class UserViewModel @Inject constructor(
             initialValue = null
         )
 
-    // ── 对外暴露：统一 UI 状态 ────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // 主 UI 状态：合并三路内部流，驱动整个用户页面的渲染
+    //   Initializing → 数据库尚未就绪，显示骨架屏
+    //   Empty        → 无绑定账号，显示引导页
+    //   Success      → 正常显示用户信息及操作状态
+    //
+    //   Eagerly：切 Tab 后 StateFlow 不重置，回来时直接恢复 Success，
+    //   彻底消除重新进入页面时的骨架屏闪烁
+    // ─────────────────────────────────────────────────────────────────
 
-    /**
-     * 驱动整个用户页面显示的单一状态流：
-     * - [UserUiState.Initializing] → 数据库尚未就绪，显示骨架屏
-     * - [UserUiState.Empty]        → 无绑定账号，显示引导页
-     * - [UserUiState.Success]      → 显示用户信息
-     *
-     * Eagerly：切 Tab 后 StateFlow 不重置，回来时直接恢复 Success，
-     * 彻底消除重新进入页面时的骨架屏闪烁。
-     */
     val uiState: StateFlow<UserUiState> = combine(
         _dbState,
         _userInfo,
@@ -122,18 +132,20 @@ class UserViewModel @Inject constructor(
         initialValue = UserUiState.Initializing
     )
 
-    // ── 业务操作 ──────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // 登录流程：预加载验证码 / 触发课表同步 / 触发成绩同步
+    //   每次调用前重置 syncError 与 verifyCodeImage，避免残留旧状态
+    // ─────────────────────────────────────────────────────────────────
 
     fun startLoginFlow() {
         viewModelScope.launch {
-            _syncError.value = null
             _verifyCodeImage.value = null
-            _verifyCodeImage.value = userRepository.prepareLogin()
-        }
-    }
+            val image = userRepository.prepareLogin()
 
-    fun clearSyncError() {
-        _syncError.value = null
+            // 获取到新图片后再清除错误，此时 UI 会从错误界面切换回验证码输入界面
+            _syncError.value = null
+            _verifyCodeImage.value = image
+        }
     }
 
     fun getCourse(studentId: String, password: String, code: String) {
@@ -146,9 +158,8 @@ class UserViewModel @Inject constructor(
                 val plainPassword = try {
                     cryptoManager.decrypt(password)
                 } catch (_: Exception) {
-                    password // 如果解密失败（比如旧版本明文数据），则尝试原始密码
+                    password // 解密失败时（旧版明文数据）使用原始值
                 }
-
 
                 val loginResult = userRepository.fetchUserInfo(studentId, plainPassword, code)
                 if (loginResult is LoginResult.Error) {
@@ -177,7 +188,7 @@ class UserViewModel @Inject constructor(
                 val plainPassword = try {
                     cryptoManager.decrypt(password)
                 } catch (_: Exception) {
-                    password // 如果解密失败（比如旧版本明文数据），则尝试原始密码
+                    password // 解密失败时（旧版明文数据）使用原始值
                 }
 
                 val loginResult = userRepository.fetchUserInfo(studentId, plainPassword, code)
@@ -197,17 +208,12 @@ class UserViewModel @Inject constructor(
         }
     }
 
-    fun decryptPassword(encrypted: String): String {
-        return try {
-            cryptoManager.decrypt(encrypted)
-        } catch (e: Exception) {
-            ""
-        }
-    }
+    // ─────────────────────────────────────────────────────────────────
+    // 账号管理：保存 / 切换 / 删除 / 解密密码
+    // ─────────────────────────────────────────────────────────────────
 
     fun saveUserAccount(studentId: String, password: String) {
         viewModelScope.launch {
-            // 这里的 password 是 UI 传来的明文
             val encryptedPassword = cryptoManager.encrypt(password)
             userRepository.deactivateAllUsers()
             userDao.insertUser(
@@ -233,5 +239,21 @@ class UserViewModel @Inject constructor(
         viewModelScope.launch {
             userRepository.deleteAllUserInfo(studentId)
         }
+    }
+
+    fun decryptPassword(encrypted: String): String {
+        return try {
+            cryptoManager.decrypt(encrypted)
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // 工具方法：重置错误状态（供 UI 在用户关闭弹窗后调用）
+    // ─────────────────────────────────────────────────────────────────
+
+    fun clearSyncError() {
+        _syncError.value = null
     }
 }

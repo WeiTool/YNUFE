@@ -95,22 +95,35 @@ import com.ynufe.ui.theme.type.UserLayout
 import com.ynufe.utils.UserUiState
 import com.ynufe.utils.toHalfWidth
 
-enum class UserDialogType {
-    NONE, EDIT, GET, DELETE, CHOOSE
+// ─────────────────────────────────────────────────────────────────
+// 统一 Dialog 状态：类型 + 关联数据合为一体，消除分散的布尔值
+//
+// 替代了原来的：
+//   - enum class UserDialogType
+//   - var selectedUserForDialog: UserEntity?
+//   - var isFetchingCourse: Boolean    （嵌入 Get 状态）
+//   - var isAddingNewUser: Boolean     （由 Edit.user.studentId.isBlank() 派生）
+// ─────────────────────────────────────────────────────────────────
+
+sealed class UserDialogState {
+    object None   : UserDialogState()
+    /** 添加（user.studentId.isBlank()）或编辑已有账号 */
+    data class Edit(val user: UserEntity)             : UserDialogState()
+    /** 获取课表（isFetchingCourse=true）或成绩（false） */
+    data class Get(val isFetchingCourse: Boolean)     : UserDialogState()
+    data class Delete(val user: UserEntity)           : UserDialogState()
+    object Choose : UserDialogState()
 }
 
 @Composable
 fun UserScreen(viewModel: UserViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
-    val allUsers by viewModel.allUsers.collectAsState()
+    val uiState        by viewModel.uiState.collectAsState()
+    val allUsers       by viewModel.allUsers.collectAsState()
     val verifyCodeImage by viewModel.verifyCodeImage
-    val syncError by viewModel.syncError.collectAsState()
+    val syncError      by viewModel.syncError.collectAsState()
 
-    var activeDialog by remember { mutableStateOf(UserDialogType.NONE) }
-    var isFetchingCourse by remember { mutableStateOf(true) }
-    var isAddingNewUser by remember { mutableStateOf(false) }
-
-    var selectedUserForDialog by remember { mutableStateOf<UserEntity?>(null) }
+    // 单一状态变量替代原来四个分散变量
+    var dialogState by remember { mutableStateOf<UserDialogState>(UserDialogState.None) }
 
     val isOperationLoading = (uiState as? UserUiState.Success)?.isOperationLoading ?: false
 
@@ -122,79 +135,64 @@ fun UserScreen(viewModel: UserViewModel = hiltViewModel()) {
         ) {
             when (val state = uiState) {
                 is UserUiState.Initializing -> UserSkeletonContent()
-                is UserUiState.Empty -> EmptyStateView()
-                is UserUiState.Success -> UserProfileContent(
-                    uiState = state,
-                    onEditClick = {
+                is UserUiState.Empty        -> EmptyStateView()
+                is UserUiState.Success      -> UserProfileContent(
+                    uiState        = state,
+                    onEditClick    = {
                         val plain = viewModel.decryptPassword(state.user.password)
-                        selectedUserForDialog = state.user.copy(password = plain)
-                        isAddingNewUser = false
-                        activeDialog = UserDialogType.EDIT
+                        dialogState = UserDialogState.Edit(state.user.copy(password = plain))
                     },
-                    onDeleteClick = {
-                        selectedUserForDialog = state.user
-                        activeDialog = UserDialogType.DELETE
-                    },
+                    onDeleteClick  = { dialogState = UserDialogState.Delete(state.user) },
                     onGetCourseClick = {
-                        isFetchingCourse = true
                         viewModel.startLoginFlow()
-                        activeDialog = UserDialogType.GET
+                        dialogState = UserDialogState.Get(isFetchingCourse = true)
                     },
                     onGetGradesClick = {
-                        isFetchingCourse = false
                         viewModel.startLoginFlow()
-                        activeDialog = UserDialogType.GET
+                        dialogState = UserDialogState.Get(isFetchingCourse = false)
                     }
                 )
             }
         }
 
         ExpandableToolbar(
-            modifier = Modifier
+            modifier      = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
-            onChooseUser = { activeDialog = UserDialogType.CHOOSE },
-            onAddUser = {
-                selectedUserForDialog = UserEntity("", "")
-                isAddingNewUser = true
-                activeDialog = UserDialogType.EDIT
-            }
+            onChooseUser  = { dialogState = UserDialogState.Choose },
+            onAddUser     = { dialogState = UserDialogState.Edit(UserEntity("", "")) }
         )
     }
 
-    if (activeDialog != UserDialogType.NONE) {
-        val dialogUser = selectedUserForDialog ?: UserEntity("", "")
+    if (dialogState != UserDialogState.None) {
         UserActionDialog(
-            type = activeDialog,
-            user = dialogUser,
-            allUsers = allUsers,
-            verifyCodeImage = verifyCodeImage,
-            syncError = syncError,
+            state              = dialogState,
+            allUsers           = allUsers,
+            verifyCodeImage    = verifyCodeImage,
+            syncError          = syncError,
             isOperationLoading = isOperationLoading,
-            onDismiss = {
+            onDismiss          = {
                 viewModel.clearSyncError()
-                activeDialog = UserDialogType.NONE
-                isAddingNewUser = false
-                selectedUserForDialog = null
+                dialogState = UserDialogState.None
             },
             onConfirmEdit = { id, pass ->
                 viewModel.saveUserAccount(id, pass)
             },
-            onConfirmSync = { code ->
+            onConfirmSync = { code, isFetchingCourse ->
                 val dbUser = (uiState as? UserUiState.Success)?.user
                 dbUser?.let {
                     if (isFetchingCourse) viewModel.getCourse(it.studentId, it.password, code)
-                    else viewModel.getGrade(it.studentId, it.password, code)
+                    else                  viewModel.getGrade(it.studentId, it.password, code)
                 }
             },
-            onConfirmDelete = {
-                (uiState as? UserUiState.Success)?.user?.let { viewModel.deleteCurrentUser(it.studentId) }
+            onConfirmDelete = { studentId ->
+                viewModel.deleteCurrentUser(studentId)
             },
             onSwitchUser = { studentId ->
                 viewModel.switchUser(studentId)
-                activeDialog = UserDialogType.NONE
+                dialogState = UserDialogState.None
             },
-            onRetry = { viewModel.startLoginFlow() },
+            onRetry       = { viewModel.startLoginFlow() },
             onRefreshCode = { viewModel.startLoginFlow() },
         )
     }
@@ -238,11 +236,11 @@ fun UserProfileContent(
     val isLoading = uiState.isOperationLoading
 
     ProfileHeader(
-        name = uiState.userInfo?.name ?: if (isLoading) "" else "未同步",
+        name      = uiState.userInfo?.name ?: if (isLoading) "" else "未同步",
         studentId = uiState.user.studentId,
         isLoading = isLoading,
-        onEdit = onEditClick,
-        onDelete = onDeleteClick
+        onEdit    = onEditClick,
+        onDelete  = onDeleteClick
     )
     InfoSection(userInfo = uiState.userInfo, isLoading = isLoading)
     ActionGrid(onGetCourse = onGetCourseClick, onGetGrades = onGetGradesClick)
@@ -251,33 +249,23 @@ fun UserProfileContent(
         modifier = Modifier
             .padding(UserLayout.HintCardMargin)
             .fillMaxWidth(),
-        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = UserLayout.HintCardBgAlpha),
-        shape = RoundedCornerShape(UserLayout.HintCardCorner),
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.tertiary.copy(alpha = UserLayout.HintCardBorderAlpha)
-        )
+        color  = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = UserLayout.HintCardBgAlpha),
+        shape  = RoundedCornerShape(UserLayout.HintCardCorner),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = UserLayout.HintCardBorderAlpha))
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = UserLayout.HintCardPaddingH,
-                vertical = UserLayout.HintCardPaddingV
-            ),
+            modifier = Modifier.padding(horizontal = UserLayout.HintCardPaddingH, vertical = UserLayout.HintCardPaddingV),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Default.Info,
                 null,
-                tint = MaterialTheme.colorScheme.tertiary,
+                tint     = MaterialTheme.colorScheme.tertiary,
                 modifier = Modifier.size(UserLayout.HintCardIconSize)
             )
             Spacer(modifier = Modifier.width(UserLayout.HintCardIconToTextSpacing))
             Column {
-                Text(
-                    "用户信息",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
+                Text("用户信息", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
                 Text(
                     "点击任意一个选项输入验证码可以获取用户信息",
                     style = MaterialTheme.typography.bodySmall,
@@ -288,46 +276,50 @@ fun UserProfileContent(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────
+// 统一 Dialog：接受 UserDialogState，内部根据类型分发内容
+// ─────────────────────────────────────────────────────────────────
+
 @Composable
 fun UserActionDialog(
-    type: UserDialogType,
-    user: UserEntity,
+    state: UserDialogState,
     allUsers: List<UserEntity>,
     verifyCodeImage: ByteArray?,
     syncError: String?,
     isOperationLoading: Boolean,
     onDismiss: () -> Unit,
     onConfirmEdit: (String, String) -> Unit,
-    onConfirmSync: (String) -> Unit,
-    onConfirmDelete: () -> Unit,
+    onConfirmSync: (code: String, isFetchingCourse: Boolean) -> Unit,
+    onConfirmDelete: (studentId: String) -> Unit,
     onSwitchUser: (String) -> Unit,
     onRetry: () -> Unit,
     onRefreshCode: () -> Unit,
 ) {
-    var idText by remember(type, user) {
-        mutableStateOf(if (type == UserDialogType.EDIT) user.studentId else "")
+    // 从 state 派生各字段，消除外部传入的冗余变量
+    val editUser       = (state as? UserDialogState.Edit)?.user
+    val isAddingNewUser = editUser?.studentId?.isBlank() ?: false
+
+    var idText by remember(state) {
+        mutableStateOf(editUser?.studentId ?: "")
     }
-    var passwordText by remember(type, user) {
+    var passwordText by remember(state) {
         mutableStateOf(
             when {
-                type == UserDialogType.EDIT && user.password.isNotBlank() -> user.password
+                editUser != null && editUser.password.isNotBlank() -> editUser.password
                 else -> "Aa!"
             }
         )
     }
-
-    var codeText by remember(type) { mutableStateOf("") }
+    var codeText       by remember(state) { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    val isIdError = idText.isBlank()
+    val isIdError       = idText.isBlank()
     val isPasswordError = passwordText.isBlank()
 
-    val showError = type == UserDialogType.GET && syncError != null
-    var pendingSync by remember(type) { mutableStateOf(false) }
+    val showError  = state is UserDialogState.Get && syncError != null
+    var pendingSync by remember(state) { mutableStateOf(false) }
 
-    val isAddingNewUser = user.studentId.isBlank()
-
-    LaunchedEffect(isOperationLoading, syncError) {
+    LaunchedEffect(isOperationLoading) {
         if (pendingSync && !isOperationLoading && syncError == null) {
             pendingSync = false
             onDismiss()
@@ -338,38 +330,38 @@ fun UserActionDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    imageVector = when (type) {
-                        UserDialogType.EDIT   ->
+                    imageVector = when (state) {
+                        is UserDialogState.Edit   ->
                             if (isAddingNewUser) Icons.Default.PersonAdd else Icons.Default.Edit
-                        UserDialogType.GET    ->
+                        is UserDialogState.Get    ->
                             if (showError) Icons.Default.ErrorOutline else Icons.Default.Visibility
-                        UserDialogType.DELETE -> Icons.Default.DeleteOutline
-                        UserDialogType.CHOOSE -> Icons.Default.People
-                        UserDialogType.NONE   -> Icons.Default.Person
+                        is UserDialogState.Delete -> Icons.Default.DeleteOutline
+                        is UserDialogState.Choose -> Icons.Default.People
+                        is UserDialogState.None   -> Icons.Default.Person
                     },
                     contentDescription = null,
-                    tint = when (type) {
-                        UserDialogType.DELETE -> MaterialTheme.colorScheme.error
-                        UserDialogType.GET    ->
+                    tint = when (state) {
+                        is UserDialogState.Delete -> MaterialTheme.colorScheme.error
+                        is UserDialogState.Get    ->
                             if (showError) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.primary
-                        else                  -> MaterialTheme.colorScheme.primary
+                        else                      -> MaterialTheme.colorScheme.primary
                     },
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
-                    text = when (type) {
-                        UserDialogType.EDIT   ->
+                    text = when (state) {
+                        is UserDialogState.Edit   ->
                             if (isAddingNewUser) "添加教务账号" else "修改账号设置"
-                        UserDialogType.GET    ->
+                        is UserDialogState.Get    ->
                             if (showError) "同步失败" else "验证登录"
-                        UserDialogType.DELETE -> "删除确认"
-                        UserDialogType.CHOOSE -> "切换账号"
-                        UserDialogType.NONE   -> ""
+                        is UserDialogState.Delete -> "删除确认"
+                        is UserDialogState.Choose -> "切换账号"
+                        is UserDialogState.None   -> ""
                     },
                     style = MaterialTheme.typography.titleLarge
                 )
@@ -377,26 +369,26 @@ fun UserActionDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier              = Modifier.fillMaxWidth(),
+                verticalArrangement   = Arrangement.spacedBy(8.dp)
             ) {
-                when (type) {
-                    UserDialogType.EDIT -> {
+                when (state) {
+                    is UserDialogState.Edit -> {
                         if (!isAddingNewUser) {
                             Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(8.dp),
+                                color    = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                shape    = RoundedCornerShape(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier              = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment     = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
                                         Icons.Default.Person,
                                         null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint     = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
@@ -409,12 +401,12 @@ fun UserActionDialog(
                         }
 
                         OutlinedTextField(
-                            value = idText,
+                            value         = idText,
                             onValueChange = { if (it.all { c -> c.isDigit() }) idText = it },
-                            label = { Text("学号") },
-                            singleLine = true,
-                            enabled = isAddingNewUser,
-                            isError = isIdError && isAddingNewUser,
+                            label         = { Text("学号") },
+                            singleLine    = true,
+                            enabled       = isAddingNewUser,
+                            isError       = isIdError && isAddingNewUser,
                             supportingText = {
                                 if (isIdError && isAddingNewUser) Text("学号不能为空")
                             },
@@ -423,7 +415,7 @@ fun UserActionDialog(
                                     Icons.Default.School,
                                     null,
                                     modifier = Modifier.size(20.dp),
-                                    tint = if (isIdError && isAddingNewUser)
+                                    tint     = if (isIdError && isAddingNewUser)
                                         MaterialTheme.colorScheme.error
                                     else
                                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -433,11 +425,11 @@ fun UserActionDialog(
                         )
 
                         OutlinedTextField(
-                            value = passwordText,
+                            value         = passwordText,
                             onValueChange = { passwordText = it.toHalfWidth() },
-                            label = { Text("密码") },
-                            singleLine = true,
-                            isError = isPasswordError,
+                            label         = { Text("密码") },
+                            singleLine    = true,
+                            isError       = isPasswordError,
                             supportingText = {
                                 if (isPasswordError) Text("密码不能为空")
                             },
@@ -446,7 +438,7 @@ fun UserActionDialog(
                                     Icons.Default.Lock,
                                     null,
                                     modifier = Modifier.size(20.dp),
-                                    tint = if (isPasswordError)
+                                    tint     = if (isPasswordError)
                                         MaterialTheme.colorScheme.error
                                     else
                                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -463,7 +455,7 @@ fun UserActionDialog(
                                     Icons.Default.VisibilityOff
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                     Icon(
-                                        imageVector = image,
+                                        imageVector        = image,
                                         contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
                                     )
                                 }
@@ -472,43 +464,41 @@ fun UserActionDialog(
                         )
                     }
 
-                    UserDialogType.GET -> {
+                    is UserDialogState.Get -> {
                         AnimatedContent(
                             targetState = showError,
-                            transitionSpec = {
-                                fadeIn(tween(220)) togetherWith fadeOut(tween(180))
-                            },
+                            transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
                             label = "GetDialogContent"
                         ) { isError ->
                             if (isError) {
                                 Column(
-                                    modifier = Modifier
+                                    modifier              = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    horizontalAlignment   = Alignment.CenterHorizontally,
+                                    verticalArrangement   = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.ErrorOutline,
+                                        imageVector        = Icons.Default.ErrorOutline,
                                         contentDescription = null,
-                                        modifier = Modifier.size(UserLayout.ErrorIconSize),
-                                        tint = MaterialTheme.colorScheme.error
+                                        modifier           = Modifier.size(UserLayout.ErrorIconSize),
+                                        tint               = MaterialTheme.colorScheme.error
                                     )
                                     Text(
-                                        text = syncError ?: "",
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        text      = syncError ?: "",
+                                        style     = MaterialTheme.typography.bodyMedium,
                                         textAlign = TextAlign.Center
                                     )
                                 }
                             } else {
                                 Column(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier            = Modifier.fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     SubcomposeAsyncImage(
-                                        model = verifyCodeImage,
+                                        model              = verifyCodeImage,
                                         contentDescription = "验证码",
-                                        modifier = Modifier
+                                        modifier           = Modifier
                                             .height(UserLayout.VerifyCodeImageHeight)
                                             .width(UserLayout.VerifyCodeImageWidth)
                                             .clickable { onRefreshCode() },
@@ -522,24 +512,24 @@ fun UserActionDialog(
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
                                     OutlinedTextField(
-                                        value = codeText,
+                                        value         = codeText,
                                         onValueChange = { codeText = it },
-                                        label = { Text("请输入验证码") },
-                                        singleLine = true
+                                        label         = { Text("请输入验证码") },
+                                        singleLine    = true
                                     )
                                 }
                             }
                         }
                     }
 
-                    UserDialogType.DELETE -> {
+                    is UserDialogState.Delete -> {
                         Text(
-                            text = "确定要删除账号 ${user.studentId} 吗? 此操作不可撤销。",
+                            text  = "确定要删除账号 ${state.user.studentId} 吗? 此操作不可撤销。",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
 
-                    UserDialogType.CHOOSE -> {
+                    is UserDialogState.Choose -> {
                         if (allUsers.isEmpty()) {
                             Text("暂无已保存的教务账号", style = MaterialTheme.typography.bodyMedium)
                         } else {
@@ -558,7 +548,7 @@ fun UserActionDialog(
                                             .clickable(enabled = !isActive) { onSwitchUser(u.studentId) }
                                             .padding(
                                                 horizontal = UserLayout.ChooseUserItemPaddingH,
-                                                vertical = UserLayout.ChooseUserItemPaddingV
+                                                vertical   = UserLayout.ChooseUserItemPaddingV
                                             ),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -582,19 +572,19 @@ fun UserActionDialog(
                                         }
                                         Spacer(modifier = Modifier.width(UserLayout.ChooseUserAvatarToIdSpacing))
                                         Text(
-                                            text = u.studentId,
-                                            style = MaterialTheme.typography.bodyLarge,
+                                            text       = u.studentId,
+                                            style      = MaterialTheme.typography.bodyLarge,
                                             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                                            modifier = Modifier.weight(1f)
+                                            modifier   = Modifier.weight(1f)
                                         )
                                         if (isActive) Icon(
                                             Icons.Default.CheckCircle,
                                             null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint     = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(UserLayout.ChooseUserCheckIconSize)
                                         )
                                         if (index < allUsers.lastIndex) HorizontalDivider(
-                                            modifier = Modifier.padding(vertical = 2.dp),
+                                            modifier  = Modifier.padding(vertical = 2.dp),
                                             thickness = 0.5.dp
                                         )
                                     }
@@ -603,7 +593,7 @@ fun UserActionDialog(
                         }
                     }
 
-                    UserDialogType.NONE -> {}
+                    is UserDialogState.None -> {}
                 }
             }
         },
@@ -615,50 +605,49 @@ fun UserActionDialog(
                     Text("重试")
                 }
 
-                type == UserDialogType.CHOOSE -> Unit
+                state is UserDialogState.Choose -> Unit
 
-                type == UserDialogType.GET -> TextButton(
+                state is UserDialogState.Get -> TextButton(
                     onClick = {
                         if (codeText.isNotBlank()) {
-                            pendingSync = true; onConfirmSync(codeText)
+                            pendingSync = true
+                            // 由 Dialog 从自身 state 取出 isFetchingCourse 回传，
+                            // 调用方 lambda 不再需要捕获或读取外部 dialogState
+                            onConfirmSync(codeText, state.isFetchingCourse)
                         }
                     }
                 ) { Text("登录同步") }
 
-                type == UserDialogType.EDIT -> {
-                    val defaultPassword = "Aa!"
-                    val isPasswordInvalidForNewUser = isAddingNewUser && passwordText == defaultPassword
-                    val canSaveNow = if (isAddingNewUser) {
-                        !isIdError && passwordText.isNotBlank() && !isPasswordInvalidForNewUser
+                state is UserDialogState.Edit -> {
+                    val defaultPassword         = "Aa!"
+                    val isPasswordInvalidForNew = isAddingNewUser && passwordText == defaultPassword
+                    val canSave = if (isAddingNewUser) {
+                        !isIdError && passwordText.isNotBlank() && !isPasswordInvalidForNew
                     } else {
                         !isIdError && !isPasswordError
                     }
                     TextButton(
                         onClick = {
-                            if (canSaveNow) {
+                            if (canSave) {
                                 onConfirmEdit(idText, passwordText)
                                 onDismiss()
                             }
                         },
-                        enabled = canSaveNow
+                        enabled = canSave
                     ) { Text("保存") }
                 }
 
-                type == UserDialogType.DELETE -> TextButton(
-                    onClick = onConfirmDelete,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
+                state is UserDialogState.Delete -> TextButton(
+                    onClick = { onConfirmDelete(state.user.studentId) },
+                    colors  = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text("删除") }
 
                 else -> TextButton(onClick = onDismiss) { Text("确定") }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(if (type == UserDialogType.CHOOSE) "关闭" else "取消")
+                Text(if (state is UserDialogState.Choose) "关闭" else "取消")
             }
         }
     )
@@ -692,7 +681,7 @@ fun ProfileHeader(
             ) {
                 if (!isLoading) {
                     Text(
-                        text = name.take(1),
+                        text  = name.take(1),
                         color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.headlineMedium
                     )
@@ -701,19 +690,19 @@ fun ProfileHeader(
             Spacer(modifier = Modifier.width(UserLayout.AvatarToNameSpacing))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = name,
-                    style = MaterialTheme.typography.headlineSmall,
+                    text       = name,
+                    style      = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier
+                    modifier   = Modifier
                         .shimmerLoading(isLoading)
                         .widthIn(min = 80.dp),
                     color = if (isLoading) Color.Transparent else Color.Unspecified
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = studentId,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isLoading) Color.Transparent
+                    text     = studentId,
+                    style    = MaterialTheme.typography.bodyMedium,
+                    color    = if (isLoading) Color.Transparent
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .shimmerLoading(isLoading)
@@ -722,18 +711,10 @@ fun ProfileHeader(
             }
             Column {
                 IconButton(onClick = onEdit) {
-                    Icon(
-                        Icons.Default.Edit,
-                        "编辑",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(Icons.Default.Edit, "编辑", tint = MaterialTheme.colorScheme.primary)
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.DeleteOutline,
-                        "删除",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                    Icon(Icons.Default.DeleteOutline, "删除", tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -745,26 +726,20 @@ fun InfoSection(userInfo: UserInfoEntity?, isLoading: Boolean) {
     Column(modifier = Modifier.padding(UserLayout.InfoSectionPadding)) {
         Text(
             "基本信息",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
+            style    = MaterialTheme.typography.labelLarge,
+            color    = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(vertical = 8.dp)
         )
         Surface(
             tonalElevation = 1.dp,
-            shape = RoundedCornerShape(UserLayout.InfoSectionCorner),
-            modifier = Modifier.fillMaxWidth()
+            shape          = RoundedCornerShape(UserLayout.InfoSectionCorner),
+            modifier       = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(UserLayout.InfoSectionPadding)) {
                 InfoItem(Icons.Default.School, "专业", userInfo?.major ?: "未设置", isLoading)
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = UserLayout.InfoDividerPaddingV),
-                    thickness = 0.5.dp
-                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = UserLayout.InfoDividerPaddingV), thickness = 0.5.dp)
                 InfoItem(Icons.Default.AccountBalance, "学院", userInfo?.college ?: "未设置", isLoading)
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = UserLayout.InfoDividerPaddingV),
-                    thickness = 0.5.dp
-                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = UserLayout.InfoDividerPaddingV), thickness = 0.5.dp)
                 InfoItem(Icons.Default.Groups, "班级", userInfo?.className ?: "未设置", isLoading)
             }
         }
@@ -778,13 +753,13 @@ fun InfoItem(icon: ImageVector, label: String, value: String, isLoading: Boolean
             icon,
             null,
             modifier = Modifier.size(UserLayout.InfoItemIconSize),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint     = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.width(UserLayout.InfoItemIconToTextSpacing))
         Text(
             label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray,
+            style    = MaterialTheme.typography.bodyMedium,
+            color    = Color.Gray,
             modifier = Modifier
                 .width(60.dp)
                 .shimmerLoading(isLoading)
@@ -792,8 +767,8 @@ fun InfoItem(icon: ImageVector, label: String, value: String, isLoading: Boolean
         Spacer(modifier = Modifier.width(UserLayout.InfoItemIconToTextSpacing))
         Text(
             value,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (isLoading) Color.Transparent else Color.Unspecified,
+            style    = MaterialTheme.typography.bodyLarge,
+            color    = if (isLoading) Color.Transparent else Color.Unspecified,
             modifier = Modifier
                 .weight(1f)
                 .shimmerLoading(isLoading)
@@ -810,18 +785,18 @@ fun ActionGrid(onGetCourse: () -> Unit, onGetGrades: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(UserLayout.ActionTileSpacing)
     ) {
         ActionTile(
-            modifier = Modifier.weight(1f),
-            title = "同步课表",
-            icon = Icons.Default.CalendarMonth,
+            modifier       = Modifier.weight(1f),
+            title          = "获取课表",
+            icon           = Icons.Default.CalendarMonth,
             containerColor = MaterialTheme.colorScheme.primary,
-            onClick = onGetCourse
+            onClick        = onGetCourse
         )
         ActionTile(
-            modifier = Modifier.weight(1f),
-            title = "同步成绩",
-            icon = Icons.Default.AutoGraph,
+            modifier       = Modifier.weight(1f),
+            title          = "获取成绩",
+            icon           = Icons.Default.AutoGraph,
             containerColor = MaterialTheme.colorScheme.secondary,
-            onClick = onGetGrades
+            onClick        = onGetGrades
         )
     }
 }
@@ -835,10 +810,10 @@ fun ActionTile(
     onClick: () -> Unit
 ) {
     Surface(
-        onClick = onClick,
+        onClick  = onClick,
         modifier = modifier.height(UserLayout.ActionTileHeight),
-        shape = RoundedCornerShape(UserLayout.ActionTileCorner),
-        color = containerColor.copy(alpha = 0.1f)
+        shape    = RoundedCornerShape(UserLayout.ActionTileCorner),
+        color    = containerColor.copy(alpha = 0.1f)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -848,9 +823,9 @@ fun ActionTile(
             Spacer(modifier = Modifier.height(UserLayout.ActionTileIconToTextSpacing))
             Text(
                 title,
-                style = MaterialTheme.typography.bodyMedium,
+                style      = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = containerColor
+                color      = containerColor
             )
         }
     }
@@ -864,14 +839,10 @@ fun EmptyStateView() {
                 Icons.Default.AccountCircle,
                 null,
                 modifier = Modifier.size(UserLayout.EmptyStateIconSize),
-                tint = Color.LightGray
+                tint     = Color.LightGray
             )
             Spacer(modifier = Modifier.height(UserLayout.EmptyStateIconToTextSpacing))
-            Text(
-                "尚未绑定学生账号",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.Gray
-            )
+            Text("尚未绑定学生账号", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
         }
     }
 }
@@ -885,7 +856,7 @@ fun ExpandableToolbar(
     var expanded by remember { mutableStateOf(false) }
 
     Row(
-        modifier = modifier,
+        modifier          = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -894,21 +865,21 @@ fun ExpandableToolbar(
             enter = fadeIn() +
                     expandHorizontally(expandFrom = Alignment.End) +
                     slideInHorizontally(initialOffsetX = { it / 2 }),
-            exit = fadeOut() +
+            exit  = fadeOut() +
                     shrinkHorizontally(shrinkTowards = Alignment.End) +
                     slideOutHorizontally(targetOffsetX = { it / 2 })
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(UserLayout.ToolbarItemSpacing),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment     = Alignment.CenterVertically
             ) {
                 ToolbarItem(
-                    icon = Icons.Default.People,
+                    icon  = Icons.Default.People,
                     label = "切换账号",
                     onClick = { onChooseUser(); expanded = false }
                 )
                 ToolbarItem(
-                    icon = Icons.Default.PersonAdd,
+                    icon  = Icons.Default.PersonAdd,
                     label = "添加教务账号",
                     onClick = { onAddUser(); expanded = false }
                 )
@@ -916,16 +887,16 @@ fun ExpandableToolbar(
         }
 
         FloatingActionButton(
-            onClick = { expanded = !expanded },
+            onClick        = { expanded = !expanded },
             containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shape = CircleShape,
-            modifier = Modifier.size(UserLayout.FabSize)
+            contentColor   = MaterialTheme.colorScheme.onPrimary,
+            shape          = CircleShape,
+            modifier       = Modifier.size(UserLayout.FabSize)
         ) {
             Icon(
                 imageVector = if (expanded) Icons.Default.Close else Icons.Default.Menu,
                 contentDescription = "工具箱",
-                modifier = Modifier.size(UserLayout.FabIconSize)
+                modifier    = Modifier.size(UserLayout.FabIconSize)
             )
         }
     }
@@ -937,29 +908,22 @@ fun ToolbarItem(
     label: String,
     onClick: () -> Unit,
     containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    contentColor: Color   = MaterialTheme.colorScheme.onSecondaryContainer,
 ) {
     Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = containerColor,
-        contentColor = contentColor,
+        onClick        = onClick,
+        shape          = CircleShape,
+        color          = containerColor,
+        contentColor   = contentColor,
         shadowElevation = 2.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = UserLayout.ToolbarItemPaddingH, vertical = UserLayout.ToolbarItemPaddingV),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier              = Modifier.padding(horizontal = UserLayout.ToolbarItemPaddingH, vertical = UserLayout.ToolbarItemPaddingV),
+            verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(UserLayout.ToolbarItemIconSize)
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
-            )
+            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(UserLayout.ToolbarItemIconSize))
+            Text(text = label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium))
         }
     }
 }
@@ -977,17 +941,17 @@ fun Modifier.shimmerLoading(
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnim by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 2000f,
+        targetValue  = 2000f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
+            animation  = tween(1500, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmer"
     )
     val brush = Brush.linearGradient(
         colors = shimmerColors,
-        start = Offset.Zero,
-        end = Offset(x = translateAnim, y = translateAnim)
+        start  = Offset.Zero,
+        end    = Offset(x = translateAnim, y = translateAnim)
     )
     this
         .clip(shape)

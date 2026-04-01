@@ -29,32 +29,71 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 /**
- * 自定义 Cookie 管理器：实现自动接力 JSESSIONID 和 jsxsd
+ * 内存中的Cookie存储管理器
+ * 实现OkHttp的CookieJar接口，用于在内存中保存和读取Cookie
  */
 class MemoryCookieJar : CookieJar {
+    // 存储所有Cookie的容器
+    // key: 域名(host), value: 该域名下所有的Cookie集合（使用Set自动去重）
     private val cookieStore = mutableMapOf<String, MutableSet<Cookie>>()
 
+    /**
+     * 保存从服务器返回的Cookie
+     * @param url 服务器请求的URL
+     * @param cookies 服务器返回的Cookie列表
+     */
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        // 使用同步锁，保证多线程环境下的线程安全
         synchronized(this) {
+            // 从URL中获取主机名（域名），例如：www.example.com
             val host = url.host
+            // 从cookieStore中获取该域名对应的Cookie集合
+            // 如果不存在则创建一个新的可变Set集合并返回
             val hostCookies = cookieStore.getOrPut(host) { mutableSetOf() }
+
+            // 遍历所有需要保存的Cookie
             cookies.forEach { newCookie ->
+                // 先移除已存在的相同Cookie（根据domain、path、name等判断）
+                // Set会自动根据equals方法判断是否相同
                 hostCookies.remove(newCookie)
+                // 将新的Cookie添加到集合中
                 hostCookies.add(newCookie)
             }
         }
     }
 
+    /**
+     * 加载将要发送给服务器的Cookie
+     * @param url 将要请求的URL
+     * @return 匹配该URL的Cookie列表
+     */
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        // 使用同步锁，保证多线程环境下的线程安全
         synchronized(this) {
+            // 从URL中获取主机名（域名）
             val host = url.host
+            // 从cookieStore中获取该域名对应的Cookie集合
+            // 如果不存在则直接返回空列表
             val hostCookies = cookieStore[host] ?: return emptyList()
+
+            // 过滤出所有匹配当前URL的Cookie
+            // matches()方法会检查：
+            // - Cookie的domain是否匹配
+            // - Cookie的path是否匹配
+            // - Cookie是否过期
+            // - Cookie的secure标志等
             return hostCookies.filter { it.matches(url) }
         }
     }
 
+    /**
+     * 清空所有存储的Cookie
+     * 通常用于用户登出或清除缓存数据时调用
+     */
     fun clear() {
+        // 使用同步锁，保证多线程环境下的线程安全
         synchronized(this) {
+            // 清空整个Cookie存储容器
             cookieStore.clear()
         }
     }

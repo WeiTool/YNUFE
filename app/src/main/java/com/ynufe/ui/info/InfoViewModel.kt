@@ -15,24 +15,27 @@ class InfoViewModel @Inject constructor(
     private val checkVersionRepository: CheckVersionRepository
 ) : ViewModel() {
 
-    // 当前 App 的版本号
+    // ─────────────────────────────────────────────────────────────────
+    // 版本信息：App 当前版本号
+    //   使用 Compose State 而非 StateFlow，因为该值只在初始化时写入一次，
+    //   无需 Flow 的响应式能力，Compose 直接重组即可
+    // ─────────────────────────────────────────────────────────────────
+
     var currentVersion by mutableStateOf("未获取")
         private set
 
+    // ─────────────────────────────────────────────────────────────────
+    // 初始化：ViewModel 创建时立即获取版本号，避免 UI 显示"未获取"占位文本
+    // ─────────────────────────────────────────────────────────────────
+
     init {
-        // 初始化时获取当前版本
-        getCurrentVersion()
+        loadCurrentVersion()
     }
 
-    private fun getCurrentVersion() {
+    private fun loadCurrentVersion() {
         viewModelScope.launch {
-            // 调用 Repository 获取当前版本
             val version = checkVersionRepository.getCurrentVersionName()
             currentVersion = version.ifEmpty { "未知版本" }
         }
     }
-}
-
-enum class Type {
-    UPDATE, FEEDBACK
 }

@@ -22,9 +22,12 @@ class WlanViewModel @Inject constructor(
     private val wlanRepository: WlanRepository,
 ) : ViewModel() {
 
-    // 定义一个 Channel 用于发送错误消息
+    // ─────────────────────────────────────────────────────────────────
+    // 事件通道：用于向 UI 发送一次性 Toast / Snackbar 文案
+    //   Channel 天然是一次性消费，不会因 UI 重组而重复触发
+    // ─────────────────────────────────────────────────────────────────
+
     private val _errorEvents = Channel<String>()
-    // 暴露给 UI 观察的 Flow
     val errorEvents = _errorEvents.receiveAsFlow()
 
     // ─────────────────────────────────────────────────────────────────
@@ -48,15 +51,13 @@ class WlanViewModel @Inject constructor(
         )
 
     // ─────────────────────────────────────────────────────────────────
-    // 操作方法
+    // 网络操作：登录 / 注销（调用仓库完整流程，结果通过事件通道通知 UI）
     // ─────────────────────────────────────────────────────────────────
 
-    // 登录：从 entity 取学号和密码，调用仓库的完整登录流程
     fun loginWlan(entity: UserWlanInfoEntity) = viewModelScope.launch {
         _errorEvents.send("登录请求已发送，请稍候...")
         when (val result = wlanRepository.login(entity.studentId, entity.password)) {
             is LoginResult.Success<*> -> {
-                // 直接获取 Repository 处理好的文案并发送 Toast 事件
                 val msg = (result.data as? String) ?: "操作成功"
                 _errorEvents.send(msg)
             }
@@ -66,64 +67,53 @@ class WlanViewModel @Inject constructor(
         }
     }
 
-    // 注销：从 entity 取学号和密码，调用仓库的完整注销流程
     fun logoutWlan(entity: UserWlanInfoEntity) = viewModelScope.launch {
-        // 直接从 Repository 获取处理后的结果
         when (val result = wlanRepository.logout(entity.studentId, entity.ip)) {
             is LoginResult.Success<*> -> {
-                // 获取 Repository 返回的 "注销成功" 文案
                 val msg = (result.data as? String) ?: "注销成功"
                 _errorEvents.send(msg)
             }
             is LoginResult.Error -> {
-                // 获取具体的错误信息
                 _errorEvents.send(result.message)
             }
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // 加解密：对外暴露密码解密，屏蔽异常细节
+    // ─────────────────────────────────────────────────────────────────
+
     fun decryptPassword(encryptedPassword: String): String {
         return try {
             wlanRepository.decryptPassword(encryptedPassword)
         } catch (e: Exception) {
-            "" // 或者返回原字符串
+            ""
         }
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // 账号操作
+    // 账号管理：增 / 改 / 设主要 / 删单条 / 删全部
     // ─────────────────────────────────────────────────────────────────
 
-
-    // 添加新账号
     fun addAccount(studentId: String, password: String, location: String) = viewModelScope.launch {
         wlanRepository.addAccountOnly(studentId, password, location)
     }
 
-    // 更新账号
     fun updateAccount(studentId: String, password: String, location: String) = viewModelScope.launch {
-        // 将明文密码加密
         val encryptedPassword = wlanRepository.encryptPassword(password)
-
-        wlanRepository.addAccountOnly(studentId, encryptedPassword, location)
+        wlanRepository.updateAccountInfo(studentId, encryptedPassword, location)
     }
 
-    // 设置为主要
     fun setPrimaryAccount(studentId: String) = viewModelScope.launch {
-        // 先清除所有账号的激活状态
         wlanRepository.deactivateAllUsers()
-        // 激活当前选择的账号
         wlanRepository.activateUser(studentId)
-        // 发送提示
         _errorEvents.send("已将 $studentId 设为主要账号")
     }
 
-    // 删除账号：从数据库移除对应学号的记录
     fun deleteAccount(studentId: String) = viewModelScope.launch {
         wlanRepository.deleteByStudentId(studentId)
     }
 
-    // 删除所有账号：从数据库移除对应学号的记录
     fun deleteAllStudent() = viewModelScope.launch {
         wlanRepository.deleteAllStudent()
     }

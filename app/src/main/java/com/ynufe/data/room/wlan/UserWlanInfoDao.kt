@@ -63,4 +63,8 @@ interface UserWlanInfoDao {
     // 更新log字段
     @Query("UPDATE user_wlan_info SET log = :log WHERE studentId = :studentId")
     suspend fun updateLog(studentId: String, log: String)
+
+    // 更新账号密码区域
+    @Query("UPDATE user_wlan_info SET password = :password, location = :location WHERE studentId = :studentId")
+    suspend fun updateAccountInfo(studentId: String, password: String, location: String)
 }

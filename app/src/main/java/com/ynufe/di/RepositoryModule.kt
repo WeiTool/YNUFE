@@ -19,7 +19,7 @@ import com.ynufe.data.room.userInfo.UserDeleteDao
 import com.ynufe.data.room.wlan.UserWlanInfoDao
 import com.ynufe.utils.CryptoManager
 import com.ynufe.utils.EncodeUtils
-import com.ynufe.utils.wlan.TEA
+import com.ynufe.utils.wlan.XXTEA
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -95,8 +95,8 @@ object RepositoryModule {
         wlanUserDao: UserWlanInfoDao,
         cryptoManager: CryptoManager,
         gson: Gson,
-        tea: TEA
+        XXTEA: XXTEA
     ): WlanRepository {
-        return WlanRepository(wlanApi, wlanUserDao, cryptoManager,gson, tea)
+        return WlanRepository(wlanApi, wlanUserDao, cryptoManager,gson, XXTEA)
     }
 }

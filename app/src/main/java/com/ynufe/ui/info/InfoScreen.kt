@@ -31,12 +31,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.ynufe.R
 import com.ynufe.ui.CheckVersionViewModel
 import com.ynufe.ui.theme.type.InfoLayout
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 枚举：关于页面的跳转目标类型
+//   UPDATE   → 跳转到更新页 / 应用商店
+//   FEEDBACK → 跳转到反馈页 / 问卷
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum class Type {
+    UPDATE, FEEDBACK, GITHUB, GITEE
+}
 
 @Composable
 fun InfoScreen(
@@ -45,6 +57,8 @@ fun InfoScreen(
 ) {
     val context = LocalContext.current
     val feedbackUrl = "https://wj.qq.com/s2/26098416/7c06/"
+    val githubUrl = "https://github.com/WeiTool/YNUFE"
+    val giteeUrl = "https://gitee.com/weitool/YNUFE"
 
     InfoContent(
         version = infoViewModel.currentVersion,
@@ -58,6 +72,16 @@ fun InfoScreen(
                 Type.UPDATE -> {
                     // 直接触发 MainActivity 已经在监听的更新逻辑
                     checkViewModel.forceCheckForUpdates()
+                }
+
+                Type.GITHUB ->{
+                    val intent = Intent(Intent.ACTION_VIEW, githubUrl.toUri())
+                    context.startActivity(intent)
+                }
+
+                Type.GITEE ->{
+                    val intent = Intent(Intent.ACTION_VIEW, giteeUrl.toUri())
+                    context.startActivity(intent)
                 }
             }
         }
@@ -83,7 +107,7 @@ fun InfoContent(
             item {
                 Spacer(modifier = Modifier.height(InfoLayout.LogoTopMargin))
                 Image(
-                    painter = painterResource(id = com.ynufe.R.drawable.ic_launcher_logo),
+                    painter = painterResource(id = R.drawable.ic_launcher_logo),
                     contentDescription = "App Logo",
                     modifier = Modifier.size(InfoLayout.LogoSize)
                 )
@@ -113,6 +137,16 @@ fun InfoContent(
                     icon = Icons.Default.SystemUpdateAlt,
                     title = "检查更新",
                     onClick = { onItemClick(Type.UPDATE) }
+                )
+                InfoRowItem(
+                    icon = ImageVector.vectorResource(id = R.drawable.github),
+                    title = "Github仓库",
+                    onClick = { onItemClick(Type.GITHUB) }
+                )
+                InfoRowItem(
+                    icon = ImageVector.vectorResource(id = R.drawable.gitee),
+                    title = "Github仓库",
+                    onClick = { onItemClick(Type.GITEE) }
                 )
             }
         }
@@ -181,30 +215,5 @@ fun InfoRowItem(
                 modifier = Modifier.size(InfoLayout.ArrowIconSize)
             )
         }
-    }
-}
-
-@Preview(showBackground = true, name = "浅色模式")
-@Composable
-fun InfoScreenLightPreview() {
-    // 使用你 Theme.kt 中定义的自定义主题
-    com.ynufe.ui.theme.YNUFETheme(darkTheme = false) {
-        // 预览内容
-        InfoContent(
-            version = "1.0.0",
-            onItemClick = { label -> println("点击了: $label") }
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "深色模式")
-@Composable
-fun InfoScreenDarkPreview() {
-    // 强制开启深色模式测试适配情况
-    com.ynufe.ui.theme.YNUFETheme(darkTheme = true) {
-        InfoContent(
-            version = "1.0.0",
-            onItemClick = { }
-        )
     }
 }

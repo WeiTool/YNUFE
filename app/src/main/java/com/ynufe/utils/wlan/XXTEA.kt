@@ -6,7 +6,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class TEA @Inject constructor() {
+class XXTEA @Inject constructor() {
     fun encode(str: String, key: String): ByteArray {
         if (str.isEmpty()) return byteArrayOf()
 
