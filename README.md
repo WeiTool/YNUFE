@@ -27,23 +27,15 @@
 
 ---
 
-## 🖼️ 页面预览
+### 📱 界面预览
 
-你可以把截图放到仓库 `docs/` 目录（或你喜欢的目录），并替换下面路径：
+| 📅 课程表 | 🧾 成绩查询 | 🧰 工具箱 |
+| :---: | :---: | :---: |
+| ![课程表](docs/course.png) | ![成绩页](docs/grade.png) | ![工具页](docs/tool.png) |
 
-- 📅 课程表页：`docs/course.png`
-- 🧾 成绩页：`docs/grade.png`
-- 🧰 工具页：`docs/tool.png`
-- 👤 用户页（教务账号 + 验证码）：`docs/user.png`
-- 🌐 WLAN 页面（校园网账号管理）：`docs/wlan.png`
-- ℹ️ 关于页（反馈 / 检查更新 / 仓库链接）：`docs/info.png`
-
-示例：
-
-```md
-![课程表](docs/course.png)
-```
-
+| 👤 用户管理 | 🌐 校园网控制 | ℹ️ 关于软件 |
+| :---: | :---: | :---: |
+| ![用户页](docs/user.png) | ![WLAN](docs/wlan.png) | ![关于页](docs/info.png) |
 ---
 
 ## 🧰 技术栈
