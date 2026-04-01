@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RewriteQueriesToDropUnusedColumns
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -12,6 +13,7 @@ interface GradeDao {
     suspend fun insertGrade(grade: GradeEntity)
 
     // 获取所有成绩，按学期降序排列
+    @RewriteQueriesToDropUnusedColumns
     @Query("""
         SELECT * FROM (
             SELECT *,
